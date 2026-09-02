@@ -1,0 +1,27 @@
+name: test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Scale set takes one job at a time.
+concurrency:
+  group: sfalert-ci-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Run directly on the apps-runner pod (ARC kubernetes mode).
+  # Do not set jobs.<id>.container — that creates a separate workflow pod.
+  test:
+    runs-on: apps-runner
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python
+        run: python3 --version
+      - name: Tests
+        run: make test

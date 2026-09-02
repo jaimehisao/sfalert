@@ -50,3 +50,5 @@ Stdlib `unittest`, no extra deps. From the repo root:
 ```bash
 make test
 ```
+
+GitHub Actions runs the same target on the self-hosted **`apps-runner`** label (`push` to `main` and pull requests).
