@@ -51,4 +51,4 @@ Stdlib `unittest`, no extra deps. From the repo root:
 make test
 ```
 
-GitHub Actions runs the same target on the self-hosted **`apps-runner`** label (`push` to `main` and pull requests).
+GitHub Actions runs the same target on `ubuntu-latest` (`push` to `main` and pull requests).

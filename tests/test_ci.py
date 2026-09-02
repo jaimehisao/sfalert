@@ -13,13 +13,14 @@ class GithubActionsTest(unittest.TestCase):
     def test_workflow_file_exists(self) -> None:
         self.assertTrue(WORKFLOW.is_file())
 
-    def test_runs_on_apps_runner(self) -> None:
-        self.assertRegex(self.text, re.compile(r"^    runs-on: apps-runner\s*$", re.M))
-        self.assertNotIn("ubuntu-latest", self.text)
+    def test_runs_on_ubuntu_latest(self) -> None:
+        self.assertRegex(self.text, re.compile(r"^    runs-on: ubuntu-latest\s*$", re.M))
+        self.assertNotIn("apps-runner", self.text)
         self.assertNotIn("self-hosted", self.text)
+
+    def test_pins_python(self) -> None:
+        self.assertIn("actions/setup-python", self.text)
+        self.assertIn('python-version: "3.12"', self.text)
 
     def test_ci_invokes_make_test(self) -> None:
         self.assertIn("make test", self.text)
-
-    def test_does_not_use_job_container(self) -> None:
-        self.assertIsNone(re.search(r"^\s+container:", self.text, re.M))
