@@ -3,70 +3,76 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SFALERT — live CAD</title>
+  <title>SFALERT — San Francisco CAD</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <div id="app">
-    <header class="top">
+    <div id="map" role="application" aria-label="San Francisco CAD map"></div>
+
+    <header class="chrome">
       <div class="brand">
-        <span class="pulse" id="pulse"></span>
+        <span class="pulse" id="pulse" aria-hidden="true"></span>
         <div>
           <div class="wordmark">SFALERT</div>
           <div class="sub" id="statusLine">loading CAD…</div>
         </div>
       </div>
-      <div class="controls">
-        <label class="field">
-          <span>Window</span>
-          <select id="window">
-            <option value="3h">Last 3 hours</option>
-            <option value="6h">Last 6 hours</option>
-            <option value="12h">Last 12 hours</option>
-            <option value="24h" selected>Last 24 hours</option>
-            <option value="7d">Last 7 days</option>
-            <option value="30d">Last 30 days</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>District</span>
-          <select id="district">
-            <option value="">All districts</option>
-          </select>
-        </label>
-        <label class="toggle">
-          <input type="checkbox" id="heatmap" checked />
-          Heatmap
-        </label>
-        <label class="toggle">
-          <input type="checkbox" id="pins" checked />
-          Pins
-        </label>
-        <label class="toggle">
-          <input type="checkbox" id="hideRoutine" checked />
-          Hide routine
-        </label>
-        <button id="refresh" type="button">Refresh</button>
-        <button id="feedToggle" type="button" class="mobile-only">Feed</button>
+
+      <div class="pills" id="windows" role="tablist" aria-label="Time window">
+        <button type="button" data-window="3h">3h</button>
+        <button type="button" data-window="6h">6h</button>
+        <button type="button" data-window="12h">12h</button>
+        <button type="button" data-window="24h" class="on">24h</button>
+        <button type="button" data-window="7d">7d</button>
+        <button type="button" data-window="30d">30d</button>
       </div>
+
+      <label class="search">
+        <span class="sr-only">Search incidents</span>
+        <input id="q" type="search" placeholder="Search calls, streets, CAD…" autocomplete="off" />
+      </label>
+
+      <label class="field district">
+        <span>District</span>
+        <select id="district">
+          <option value="">All districts</option>
+        </select>
+      </label>
+
+      <div class="switches">
+        <button type="button" class="switch on" id="heatmap" aria-pressed="true">Heat</button>
+        <button type="button" class="switch on" id="pins" aria-pressed="true">Pins</button>
+        <button type="button" class="switch" id="openOnly" aria-pressed="false">Open</button>
+        <button type="button" class="switch on" id="hideRoutine" aria-pressed="true">Skip noise</button>
+      </div>
+
+      <button type="button" id="refresh">Sync</button>
+      <button type="button" id="feedToggle" class="mobile-only">Feed</button>
     </header>
 
-    <div class="cats" id="cats"></div>
+    <nav class="cats" id="cats" aria-label="Call categories"></nav>
 
-    <main>
-      <div id="map"></div>
-      <aside id="panel" class="panel">
-        <section class="stats" id="stats"></section>
-        <section class="hours" id="hours"></section>
-        <section class="hotspots" id="hotspots"></section>
-        <section class="feed-head">
-          <h2>Live feed</h2>
-          <span id="feedCount"></span>
-        </section>
-        <div class="feed" id="feed"></div>
-      </aside>
-    </main>
+    <aside class="drawer" id="panel">
+      <section class="stats" id="stats"></section>
+      <section class="spark-wrap">
+        <h2>Hour of day</h2>
+        <div class="spark" id="hours"></div>
+      </section>
+      <section class="hotspots" id="hotspots"></section>
+      <section id="detail" hidden></section>
+      <section class="feed-head">
+        <h2>Live feed</h2>
+        <span id="feedCount"></span>
+      </section>
+      <div class="feed" id="feed"></div>
+    </aside>
+
+    <div class="legend" id="legend"></div>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

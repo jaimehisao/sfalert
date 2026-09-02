@@ -58,9 +58,15 @@ class ApiServerTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn("text/html", ctype)
         self.assertIn(b"SFALERT", body)
+        self.assertIn(b'id="map"', body)
+        self.assertIn(b'id="q"', body)
         status, _, js = self._get("/app.js")
         self.assertEqual(status, 200)
         self.assertIn(b"heatmap", js)
+        self.assertIn(b"escapeHtml", js)
+        status, _, css = self._get("/styles.css")
+        self.assertEqual(status, 200)
+        self.assertIn(b"backdrop-filter", css)
 
     def test_incidents_hide_routine_by_default(self) -> None:
         _, _, body = self._get("/api/incidents?window=24h")

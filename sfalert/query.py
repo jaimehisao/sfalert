@@ -59,9 +59,10 @@ def list_incidents(
 ) -> list[dict[str, Any]]:
     where, args = _filters(window, category, district, hide_routine, status)
     sql = f"""
-        SELECT cad_number, received_datetime, close_datetime, call_type_final_desc,
-               priority, agency, intersection, lat, lon, neighborhood, district,
-               category, routine, severity, status, sensitive, disposition
+        SELECT cad_number, received_datetime, dispatch_datetime, onscene_datetime,
+               close_datetime, call_type_final_desc, priority, agency, intersection,
+               lat, lon, neighborhood, district, category, routine, severity, status,
+               sensitive, disposition
         FROM incidents
         WHERE {where}
         ORDER BY received_datetime DESC
