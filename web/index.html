@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SFALERT — live CAD</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="top">
+      <div class="brand">
+        <span class="pulse" id="pulse"></span>
+        <div>
+          <div class="wordmark">SFALERT</div>
+          <div class="sub" id="statusLine">loading CAD…</div>
+        </div>
+      </div>
+      <div class="controls">
+        <label class="field">
+          <span>Window</span>
+          <select id="window">
+            <option value="3h">Last 3 hours</option>
+            <option value="6h">Last 6 hours</option>
+            <option value="12h">Last 12 hours</option>
+            <option value="24h" selected>Last 24 hours</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>District</span>
+          <select id="district">
+            <option value="">All districts</option>
+          </select>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="heatmap" checked />
+          Heatmap
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="pins" checked />
+          Pins
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="hideRoutine" checked />
+          Hide routine
+        </label>
+        <button id="refresh" type="button">Refresh</button>
+        <button id="feedToggle" type="button" class="mobile-only">Feed</button>
+      </div>
+    </header>
+
+    <div class="cats" id="cats"></div>
+
+    <main>
+      <div id="map"></div>
+      <aside id="panel" class="panel">
+        <section class="stats" id="stats"></section>
+        <section class="hours" id="hours"></section>
+        <section class="hotspots" id="hotspots"></section>
+        <section class="feed-head">
+          <h2>Live feed</h2>
+          <span id="feedCount"></span>
+        </section>
+        <div class="feed" id="feed"></div>
+      </aside>
+    </main>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
