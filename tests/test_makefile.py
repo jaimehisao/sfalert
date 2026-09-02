@@ -11,7 +11,7 @@ class MakefileTest(unittest.TestCase):
         self.text = (ROOT / "Makefile").read_text()
 
     def test_expected_targets_exist(self) -> None:
-        for target in ("help", "test", "ingest", "serve", "run", "clean"):
+        for target in ("help", "test", "ingest", "serve", "run", "docker", "clean"):
             self.assertRegex(
                 self.text,
                 re.compile(rf"^{re.escape(target)}:", re.M),
@@ -31,3 +31,4 @@ class MakefileTest(unittest.TestCase):
         out = subprocess.check_output(["make", "help"], cwd=ROOT, text=True)
         self.assertIn("make test", out)
         self.assertIn("make serve", out)
+        self.assertIn("make docker", out)

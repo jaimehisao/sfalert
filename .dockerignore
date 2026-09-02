@@ -1,0 +1,15 @@
+.git
+.github
+.codegraph
+data
+tests
+__pycache__
+*.py[cod]
+.venv
+venv
+.env
+*.md
+Makefile
+.dockerignore
+Dockerfile
+.git*
