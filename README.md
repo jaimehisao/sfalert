@@ -48,5 +48,5 @@ Locations are snapped to intersections by the city. Sensitive calls often have n
 Stdlib `unittest`, no extra deps. From the repo root:
 
 ```bash
-python -m unittest discover -s tests -t . -v
+make test
 ```
