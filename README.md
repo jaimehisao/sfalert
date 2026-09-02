@@ -51,4 +51,11 @@ Stdlib `unittest`, no extra deps. From the repo root:
 make test
 ```
 
-GitHub Actions runs the same target on `ubuntu-latest` (`push` to `main` and pull requests).
+GitHub Actions runs the same target on `ubuntu-latest` (`push` to `main` and pull requests). Pushes to `main` and `v*` tags also publish a container image to GHCR:
+
+```bash
+docker pull ghcr.io/jaimehisao/sfalert:latest
+docker run --rm -p 8765:8765 -v sfalert-data:/app/data ghcr.io/jaimehisao/sfalert:latest
+```
+
+Build locally with `make docker`. The image listens on `0.0.0.0:8765` and stores SQLite under `/app/data`.

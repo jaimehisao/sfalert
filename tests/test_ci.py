@@ -24,3 +24,12 @@ class GithubActionsTest(unittest.TestCase):
 
     def test_ci_invokes_make_test(self) -> None:
         self.assertIn("make test", self.text)
+
+    def test_publishes_ghcr_image_on_push(self) -> None:
+        self.assertIn("packages: write", self.text)
+        self.assertIn("ghcr.io/${{ github.repository }}", self.text)
+        self.assertIn("docker/build-push-action", self.text)
+        self.assertIn("docker/login-action", self.text)
+        self.assertIn("push: ${{ github.event_name != 'pull_request' }}", self.text)
+        self.assertIn('tags: ["v*"]', self.text)
+        self.assertIn("needs: test", self.text)
