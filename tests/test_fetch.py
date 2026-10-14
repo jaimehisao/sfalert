@@ -64,6 +64,31 @@ class NormalizeTest(unittest.TestCase):
         self.assertIsNone(row["lat"])
         self.assertIsNone(row["lon"])
 
+    def test_wkt_point_outside_sf_is_rejected(self) -> None:
+        # The WKT branch used to skip the bounds check the GeoJSON branch has.
+        row = normalize(
+            cad_payload(intersection_point="POINT (0 0)"), "closed", "t"
+        )
+        self.assertIsNone(row["lat"])
+        self.assertIsNone(row["lon"])
+
+    def test_malformed_points_do_not_raise(self) -> None:
+        # A single garbage row must degrade to unmapped, not kill the batch.
+        for point in (
+            {"type": "Point"},
+            {"coordinates": ["abc", "def"]},
+            {"coordinates": [-122.41]},
+            "POINT",
+            "POINT (abc def)",
+            12345,
+            None,
+        ):
+            row = normalize(
+                cad_payload(intersection_point=point), "closed", "t"
+            )
+            self.assertIsNone(row["lat"], point)
+            self.assertIsNone(row["lon"], point)
+
     def test_passing_call_is_routine(self) -> None:
         row = normalize(
             cad_payload(

@@ -59,20 +59,30 @@ def soda_get(url: str, params: dict[str, str], retries: int = 4) -> list[dict[st
     raise RuntimeError(f"Failed fetching {url}: {last_err}") from last_err
 
 
+def _in_sf_bounds(lat: float, lon: float) -> bool:
+    return -123.2 <= lon <= -122.2 and 37.6 <= lat <= 37.9
+
+
 def _parse_point(row: dict[str, Any]) -> tuple[float | None, float | None]:
-    point = row.get("intersection_point")
-    if isinstance(point, dict):
-        coords = point.get("coordinates") or []
-        if len(coords) >= 2:
-            lon, lat = float(coords[0]), float(coords[1])
-            if -123.2 <= lon <= -122.2 and 37.6 <= lat <= 37.9:
-                return lat, lon
-    if isinstance(point, str) and point.upper().startswith("POINT"):
-        inner = point.replace("POINT", "").replace("(", "").replace(")", "").strip()
-        parts = inner.split()
-        if len(parts) == 2:
-            lon, lat = float(parts[0]), float(parts[1])
-            return lat, lon
+    # One malformed intersection_point must never take down a whole 50k-row
+    # batch, so parsing failures degrade to "unmapped" instead of raising.
+    try:
+        point = row.get("intersection_point")
+        if isinstance(point, dict):
+            coords = point.get("coordinates") or []
+            if len(coords) >= 2:
+                lon, lat = float(coords[0]), float(coords[1])
+                if _in_sf_bounds(lat, lon):
+                    return lat, lon
+        elif isinstance(point, str) and point.upper().startswith("POINT"):
+            inner = point.replace("POINT", "").replace("(", "").replace(")", "").strip()
+            parts = inner.split()
+            if len(parts) == 2:
+                lon, lat = float(parts[0]), float(parts[1])
+                if _in_sf_bounds(lat, lon):
+                    return lat, lon
+    except (TypeError, ValueError, IndexError, AttributeError):
+        pass
     return None, None
 
 
