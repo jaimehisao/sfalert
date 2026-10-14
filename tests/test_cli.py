@@ -25,3 +25,20 @@ class CliTest(unittest.TestCase):
         self.assertEqual(args.cmd, "serve")
         self.assertEqual(args.port, 9000)
         self.assertTrue(args.no_poll)
+
+    def test_root_flags_before_subcommand_are_honored(self) -> None:
+        # Subparser defaults must not clobber root-parsed values.
+        args = self.parser.parse_args(["--days", "60", "ingest"])
+        self.assertEqual(args.days, 60)
+        args = self.parser.parse_args(["--port", "9000", "serve"])
+        self.assertEqual(args.port, 9000)
+        args = self.parser.parse_args(["--host", "0.0.0.0", "serve"])
+        self.assertEqual(args.host, "0.0.0.0")
+        args = self.parser.parse_args(["--no-poll", "serve"])
+        self.assertTrue(args.no_poll)
+
+    def test_subcommand_defaults_still_apply(self) -> None:
+        self.assertEqual(self.parser.parse_args(["ingest"]).days, 30)
+        self.assertEqual(self.parser.parse_args(["serve"]).port, 8765)
+        self.assertFalse(self.parser.parse_args(["serve"]).no_poll)
+        self.assertEqual(self.parser.parse_args(["ingest", "--days", "7"]).days, 7)
