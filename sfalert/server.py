@@ -111,6 +111,7 @@ class Handler(SimpleHTTPRequestHandler):
                             category=category,
                             district=district,
                             hide_routine=hide_routine,
+                            q=q,
                         )
                     }
                 )
@@ -123,6 +124,7 @@ class Handler(SimpleHTTPRequestHandler):
                         category=category,
                         district=district,
                         hide_routine=hide_routine,
+                        q=q,
                     )
                 )
                 return

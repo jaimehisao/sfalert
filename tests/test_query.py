@@ -139,6 +139,23 @@ class QueryTest(unittest.TestCase):
         points = heatmap_points(self.conn, window="24h", district="TENDERLOIN")
         self.assertEqual(points, [])
 
+    def test_search_scopes_stats_and_heatmap(self) -> None:
+        # A search must scope every panel the UI shows, not only the feed.
+        s = stats(self.conn, window="30d", q="assault")
+        self.assertEqual(s["total"], 1)
+        self.assertEqual([r["category"] for r in s["by_category"]], ["violence"])
+        self.assertEqual(len(s["hotspots"]), 1)
+        self.assertEqual(s["hotspots"][0]["intersection"], "MARKET ST \\ 6TH ST")
+        points = heatmap_points(self.conn, window="30d", q="assault")
+        self.assertEqual(len(points), 1)
+
+        s2 = stats(self.conn, window="30d", q="market")
+        self.assertEqual(s2["total"], 3)
+        self.assertEqual(heatmap_points(self.conn, window="30d", q="market") != [], True)
+
+        # No query leaves every panel unscoped.
+        self.assertEqual(stats(self.conn, window="30d")["total"], 3)
+
     def test_status_filter_selects_open_or_closed(self) -> None:
         # The UI's "Open" switch is backed by this parameter.
         open_rows = list_incidents(self.conn, window="30d", status="open")

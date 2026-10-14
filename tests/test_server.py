@@ -83,6 +83,16 @@ class ApiServerTest(unittest.TestCase):
         rows = json.loads(body)
         self.assertEqual([r["cad_number"] for r in rows], ["api-pass"])
 
+    def test_search_scopes_stats_and_heatmap_endpoints(self) -> None:
+        # All three endpoints accept q, so every panel shows the same scope.
+        _, _, body = self._get("/api/stats?window=24h&q=traffic")
+        s = json.loads(body)
+        self.assertEqual(s["total"], 1)
+        _, _, body = self._get("/api/heatmap?window=24h&q=traffic")
+        self.assertEqual(len(json.loads(body)["points"]), 1)
+        _, _, body = self._get("/api/stats?window=24h&q=nothingmatches")
+        self.assertEqual(json.loads(body)["total"], 0)
+
     def test_incidents_hide_routine_by_default(self) -> None:
         _, _, body = self._get("/api/incidents?window=24h")
         rows = json.loads(body)
