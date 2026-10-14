@@ -90,6 +90,20 @@ class ApiServerTest(unittest.TestCase):
         self.assertIn("90d", meta["windows"])
         self.assertEqual(meta["windows"][-1], "90d")
 
+    def test_unknown_window_is_400(self) -> None:
+        with self.assertRaises(HTTPError) as ctx:
+            urlopen(self.base + "/api/incidents?window=5min", timeout=5)
+        self.assertEqual(ctx.exception.code, 400)
+
+    def test_non_integer_limit_is_400(self) -> None:
+        with self.assertRaises(HTTPError) as ctx:
+            urlopen(self.base + "/api/incidents?limit=abc", timeout=5)
+        self.assertEqual(ctx.exception.code, 400)
+
+    def test_limit_is_clamped(self) -> None:
+        _, _, body = self._get("/api/incidents?limit=100000")
+        self.assertLessEqual(len(json.loads(body)), 500)
+
     def test_unknown_api_is_404(self) -> None:
         with self.assertRaises(HTTPError) as ctx:
             urlopen(self.base + "/api/nope", timeout=5)

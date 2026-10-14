@@ -55,11 +55,18 @@ class Handler(SimpleHTTPRequestHandler):
             return value or default
 
         window = one("window", "24h") or "24h"
+        if window not in WINDOWS:
+            self._json({"error": f"unknown window: {window}"}, 400)
+            return
         category = one("category")
         district = one("district")
         status = one("status")
         hide_routine = one("hide_routine", "1") != "0"
-        limit = int(one("limit", "200") or "200")
+        try:
+            limit = int(one("limit", "200") or "200")
+        except ValueError:
+            self._json({"error": "limit must be an integer"}, 400)
+            return
         limit = max(1, min(limit, 500))
 
         conn = connect()
