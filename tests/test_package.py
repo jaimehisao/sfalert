@@ -23,6 +23,14 @@ class PackageTest(unittest.TestCase):
         dev = self.pyproject["project"]["optional-dependencies"]["dev"]
         self.assertTrue(any(dep.startswith("coverage") for dep in dev), dev)
 
+    def test_console_script_entry_point(self) -> None:
+        scripts = self.pyproject["project"]["scripts"]
+        self.assertEqual(scripts["sfalert"], "sfalert.__main__:main")
+        # The entry point must resolve to the real main().
+        module_name, _, attr = scripts["sfalert"].partition(":")
+        self.assertEqual(module_name, "sfalert.__main__")
+        self.assertEqual(attr, "main")
+
     def test_version_is_dynamic_from_package(self) -> None:
         # Single source of truth: pyproject must not pin a version.
         self.assertIn("version", self.pyproject["project"]["dynamic"])

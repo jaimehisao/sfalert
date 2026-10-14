@@ -14,7 +14,8 @@ Python 3.11+ , stdlib only.
 python -m sfalert
 ```
 
-Or install it (`pip install .`) and run `sfalert` from anywhere.
+Or install it (`pip install .`) and run the `sfalert` command from
+anywhere - `python -m sfalert` still works from a checkout.
 
 That backfills ~30 days of closed calls, snapshots the real-time 48h window, then serves:
 
@@ -44,6 +45,7 @@ Locations are snapped to intersections by the city. Sensitive calls often have n
 - Category chips — violence, theft, traffic, welfare, …
 - Time window — 3h through 90d
 - District — SFPD districts
+- Search — call type, street, neighborhood, district, CAD number, or agency; scopes the feed, the pins, and the stats panels
 
 ## Tests
 
@@ -54,7 +56,7 @@ make test
 ```
 
 `make coverage` runs the same suite under coverage and fails below 85%
-(branch coverage; currently 100%). It needs the dev extra:
+(branch coverage, scoped to the `sfalert/` package). It needs the dev extra:
 `pip install -e ".[dev]"`. GitHub Actions runs the coverage gate on every
 `push` to `main` and pull request.
 

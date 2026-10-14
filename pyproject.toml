@@ -10,6 +10,9 @@ readme = "README.md"
 requires-python = ">=3.11"
 # Stdlib only - no runtime dependencies.
 
+[project.scripts]
+sfalert = "sfalert.__main__:main"
+
 [project.optional-dependencies]
 dev = ["coverage>=7"]
 
