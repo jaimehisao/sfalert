@@ -37,4 +37,7 @@ class WebUiTest(unittest.TestCase):
         self.assertIn('p.set("q", state.q.trim())', self.js)
         self.assertNotIn("visibleIncidents", self.js)
         self.assertIn("renderDetail", self.js)
+        # Polling must pause while the tab is hidden.
+        self.assertIn("document.hidden", self.js)
+        self.assertIn("visibilitychange", self.js)
         self.assertNotIn("citizen", self.js.lower())

@@ -386,4 +386,10 @@ document.addEventListener("keydown", (e) => {
 readUrl();
 document.getElementById("q").value = state.q;
 reload();
-setInterval(reload, 60000);
+setInterval(() => {
+  // Three API requests per tick is wasteful on a backgrounded tab.
+  if (!document.hidden) reload();
+}, 60000);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) reload();
+});
