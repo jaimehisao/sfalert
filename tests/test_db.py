@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from sfalert.db import connect, count_incidents, upsert_incidents
+from sfalert.db import SCHEMA_VERSION, connect, count_incidents, upsert_incidents
 
 from tests.helpers import incident_row
 
@@ -72,3 +72,11 @@ class SqliteStoreTest(unittest.TestCase):
             self.assertEqual(count_incidents(again), 1)
         finally:
             again.close()
+
+    def test_connect_sets_schema_version(self) -> None:
+        version = self.conn.execute("PRAGMA user_version").fetchone()[0]
+        self.assertEqual(version, SCHEMA_VERSION)
+
+    def test_connect_sets_busy_timeout(self) -> None:
+        timeout = self.conn.execute("PRAGMA busy_timeout").fetchone()[0]
+        self.assertGreaterEqual(timeout, 1000)
