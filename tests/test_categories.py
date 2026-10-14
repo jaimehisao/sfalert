@@ -34,8 +34,40 @@ class CategorizeTest(unittest.TestCase):
         self.assertTrue(meet_routine)
 
     def test_empty_description(self) -> None:
-        self.assertEqual(categorize(None), ("other", False, 1))
-        self.assertEqual(categorize(""), ("other", False, 1))
+        self.assertEqual(categorize(None), ("other", True, 1))
+        self.assertEqual(categorize(""), ("other", True, 1))
+
+    def test_production_strings_land_in_expected_categories(self) -> None:
+        # Needles validated against live DataSF call_type_final_desc values.
+        expected = {
+            "H&R INJURY ACCIDENT": "traffic",
+            "H&R VEH ACCIDENT": "traffic",
+            "INJURY VEH ACCIDENT": "traffic",
+            "Psych escort": "welfare",
+            "PSYCH EVAL / HOLD": "welfare",
+            "416 for medication": "welfare",
+            "416 for restraints": "welfare",
+            "SENILE PERSON": "welfare",
+            "VANDALISM": "quality",
+            "GRAFFITI VANDALISM": "quality",
+            "VANDALISM DV": "violence",
+            "PROWLER": "suspicious",
+            "PERSON BREAKING IN": "suspicious",
+            "BOMB THREAT": "suspicious",
+            "EXPLOSIVE FOUND": "suspicious",
+            "SHOT SPOTTER": "violence",
+            "KIDNAPPING": "violence",
+            "STALKING": "violence",
+            "SHOTS FIRED": "violence",
+        }
+        for desc, category in expected.items():
+            self.assertEqual(categorize(desc)[0], category, desc)
+
+    def test_misc_and_empty_descriptions_are_routine_noise(self) -> None:
+        for desc in ("MISC", "MONEY COUNTS", ""):
+            _, routine, weight = categorize(desc)
+            self.assertTrue(routine, desc)
+            self.assertEqual(weight, 1, desc)
 
     def test_category_meta_includes_traffic(self) -> None:
         ids = {row["id"] for row in category_meta()}

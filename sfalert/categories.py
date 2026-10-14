@@ -38,6 +38,9 @@ _RULES: list[tuple[str, tuple[str, ...]]] = [
             "BRANDISH",
             "STRONG ARM",
             "KNIFE",
+            "STALKING",
+            "KIDNAPPING",
+            "SHOT SPOTTER",
             "THREATS",
             "DOMESTIC",
             " DV",
@@ -70,6 +73,9 @@ _RULES: list[tuple[str, tuple[str, ...]]] = [
             "SICK",
             "INJURED PERSON",
             "PERSON DOWN",
+            "PSYCH",
+            "416",
+            "SENILE",
         ),
     ),
     (
@@ -83,6 +89,7 @@ _RULES: list[tuple[str, tuple[str, ...]]] = [
             "TRAFFIC",
             "VEH ACCIDENT",
             "INJURY VEH",
+            "INJURY ACCIDENT",
             "HIT & RUN",
             "HIT AND RUN",
             "TOW",
@@ -102,11 +109,21 @@ _RULES: list[tuple[str, tuple[str, ...]]] = [
             "PANHANDL",
             "URINAT",
             "DISTURB",
+            "VANDALISM",
+            "GRAFFITI",
         ),
     ),
     (
         "suspicious",
-        ("SUSPICIOUS", "COMPLAINT UNKN"),
+        (
+            "SUSPICIOUS",
+            "COMPLAINT UNKN",
+            "PROWLER",
+            "BREAKING IN",
+            "BOMB",
+            "EXPLOSIVE",
+            "EXPLOSION",
+        ),
     ),
     (
         "police",
@@ -131,6 +148,8 @@ _ROUTINE = (
     "MUNI INSPECT",
     "PARKING",
     "INFO",
+    "MISC",
+    "MONEY COUNTS",
 )
 
 _HOTSPOT_TRAFFIC = (
@@ -144,7 +163,9 @@ def categorize(call_type_desc: str | None) -> tuple[str, bool, int]:
     """Return (category, is_routine, heatmap_weight)."""
     text = (call_type_desc or "").upper()
     if not text:
-        return "other", False, 1
+        # Blank descriptions carry no signal; treat them as noise so the
+        # default "Skip noise" filter keeps them out of feed and heatmap.
+        return "other", True, 1
     if any(token in text for token in _HOTSPOT_TRAFFIC):
         return "traffic", False, int(CATEGORIES["traffic"]["weight"])
     routine = any(token in text for token in _ROUTINE)
