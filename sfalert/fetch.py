@@ -16,6 +16,13 @@ CLOSED_URL = "https://data.sfgov.org/resource/2zdj-bwza.json"
 PAGE_SIZE = 50000
 USER_AGENT = "sfalert/0.1 (local CAD research; github.com/local)"
 
+# HTTP status codes that can plausibly succeed on a later attempt.
+RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+
+
+class SocrataError(RuntimeError):
+    """DataSF returned an error payload instead of a result list."""
+
 
 def _headers() -> dict[str, str]:
     headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
@@ -35,12 +42,19 @@ def soda_get(url: str, params: dict[str, str], retries: int = 4) -> list[dict[st
             with urllib.request.urlopen(req, timeout=120) as resp:
                 payload = json.loads(resp.read().decode("utf-8"))
             if isinstance(payload, dict) and payload.get("error"):
-                raise RuntimeError(payload.get("message") or "Socrata error")
+                raise SocrataError(payload.get("message") or "Socrata error")
             if not isinstance(payload, list):
-                raise RuntimeError(f"Unexpected SODA payload: {type(payload)}")
+                raise SocrataError(f"Unexpected SODA payload: {type(payload)}")
             return payload
-        except (urllib.error.URLError, TimeoutError, RuntimeError) as exc:
+        except (urllib.error.URLError, TimeoutError, SocrataError) as exc:
             last_err = exc
+            if (
+                isinstance(exc, urllib.error.HTTPError)
+                and exc.code not in RETRYABLE_STATUS
+            ):
+                # 4xx other than 429: a bad request will never succeed on
+                # retry, so fail fast instead of burning attempts.
+                break
             time.sleep(1.5 * (attempt + 1))
     raise RuntimeError(f"Failed fetching {url}: {last_err}") from last_err
 

@@ -2,7 +2,7 @@ import json
 import unittest
 from io import BytesIO
 from unittest.mock import patch
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 
 from sfalert.fetch import (
     fetch_realtime,
@@ -92,6 +92,28 @@ class SodaClientTest(unittest.TestCase):
             soda_get("https://example.test/data.json", {}, retries=3)
         self.assertEqual(urlopen.call_count, 3)
         self.assertEqual(sleep.call_count, 3)
+
+    @patch("sfalert.fetch.time.sleep")
+    @patch("sfalert.fetch.urllib.request.urlopen")
+    def test_soda_get_does_not_retry_client_errors(self, urlopen, sleep) -> None:
+        # HTTPError subclasses URLError; a 400 will never succeed on retry.
+        urlopen.side_effect = HTTPError("https://x.test", 400, "Bad Request", {}, None)
+        with self.assertRaises(RuntimeError):
+            soda_get("https://example.test/data.json", {}, retries=4)
+        self.assertEqual(urlopen.call_count, 1)
+        sleep.assert_not_called()
+
+    @patch("sfalert.fetch.time.sleep")
+    @patch("sfalert.fetch.urllib.request.urlopen")
+    def test_soda_get_retries_then_succeeds_on_429(self, urlopen, sleep) -> None:
+        urlopen.side_effect = [
+            HTTPError("https://x.test", 429, "Too Many Requests", {}, None),
+            FakeResponse([{"cad_number": "1"}]),
+        ]
+        rows = soda_get("https://example.test/data.json", {})
+        self.assertEqual(rows, [{"cad_number": "1"}])
+        self.assertEqual(urlopen.call_count, 2)
+        sleep.assert_called_once()
 
     @patch("sfalert.fetch.soda_get")
     def test_iter_closed_paginates(self, soda_get_mock) -> None:
