@@ -9,12 +9,13 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterator
 
+from . import __version__
 from .categories import categorize
 
 REALTIME_URL = "https://data.sfgov.org/resource/gnap-fj3t.json"
 CLOSED_URL = "https://data.sfgov.org/resource/2zdj-bwza.json"
 PAGE_SIZE = 50000
-USER_AGENT = "sfalert/0.1 (local CAD research; github.com/local)"
+USER_AGENT = f"sfalert/{__version__} (local CAD map; github.com/jaimehisao/sfalert)"
 
 # HTTP status codes that can plausibly succeed on a later attempt.
 RETRYABLE_STATUS = {429, 500, 502, 503, 504}
