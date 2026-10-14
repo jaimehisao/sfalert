@@ -19,6 +19,10 @@ class PackageTest(unittest.TestCase):
         self.assertGreaterEqual(self.pyproject["project"]["requires-python"], "3.11")
         self.assertNotIn("dependencies", self.pyproject["project"])
 
+    def test_dev_extra_declares_coverage(self) -> None:
+        dev = self.pyproject["project"]["optional-dependencies"]["dev"]
+        self.assertTrue(any(dep.startswith("coverage") for dep in dev), dev)
+
     def test_version_is_dynamic_from_package(self) -> None:
         # Single source of truth: pyproject must not pin a version.
         self.assertIn("version", self.pyproject["project"]["dynamic"])

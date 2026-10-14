@@ -22,8 +22,12 @@ class GithubActionsTest(unittest.TestCase):
         self.assertIn("actions/setup-python", self.text)
         self.assertIn('python-version: "3.12"', self.text)
 
-    def test_ci_invokes_make_test(self) -> None:
-        self.assertIn("make test", self.text)
+    def test_ci_invokes_coverage_gated_tests(self) -> None:
+        self.assertIn("make coverage", self.text)
+        self.assertIn("--fail-under", (ROOT / "Makefile").read_text())
+
+    def test_ci_installs_dev_extra(self) -> None:
+        self.assertIn('pip install -e ".[dev]"', self.text)
 
     def test_publishes_ghcr_image_on_push(self) -> None:
         self.assertIn("packages: write", self.text)

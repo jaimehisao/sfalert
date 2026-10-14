@@ -53,6 +53,11 @@ Stdlib `unittest`, no extra deps. From the repo root:
 make test
 ```
 
+`make coverage` runs the same suite under coverage and fails below 85%
+(branch coverage; currently 100%). It needs the dev extra:
+`pip install -e ".[dev]"`. GitHub Actions runs the coverage gate on every
+`push` to `main` and pull request.
+
 GitHub Actions runs the same target on `ubuntu-latest` (`push` to `main` and pull requests). Pushes to `main` and `v*` tags also publish a container image to GHCR:
 
 ```bash
