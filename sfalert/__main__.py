@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 import webbrowser
 
 from .ingest import ensure_data, ingest
@@ -42,26 +43,32 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
 
-    if args.cmd == "ingest":
-        ingest(
-            days=args.days,
-            realtime=not args.no_realtime,
-            backfill=not args.no_backfill,
-        )
-        return
+    try:
+        if args.cmd == "ingest":
+            ingest(
+                days=args.days,
+                realtime=not args.no_realtime,
+                backfill=not args.no_backfill,
+            )
+            return
 
-    if args.cmd == "serve":
+        if args.cmd == "serve":
+            serve(host=args.host, port=args.port, poll=not args.no_poll)
+            return
+
+        ensure_data(days=args.days)
+        if not args.no_browser:
+            url = f"http://{args.host}:{args.port}"
+            try:
+                webbrowser.open(url)
+            except Exception:
+                pass
         serve(host=args.host, port=args.port, poll=not args.no_poll)
-        return
-
-    ensure_data(days=args.days)
-    if not args.no_browser:
-        url = f"http://{args.host}:{args.port}"
-        try:
-            webbrowser.open(url)
-        except Exception:
-            pass
-    serve(host=args.host, port=args.port, poll=not args.no_poll)
+    except (RuntimeError, OSError) as exc:
+        # Expected operational failures (feed unreachable, port busy):
+        # one clean line, exit 1. Unexpected exceptions still traceback.
+        print(f"sfalert: {exc}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
