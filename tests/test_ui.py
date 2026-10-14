@@ -10,6 +10,15 @@ class WebUiTest(unittest.TestCase):
         self.css = (ROOT / "web" / "styles.css").read_text()
         self.js = (ROOT / "web" / "app.js").read_text()
 
+    def test_map_library_is_vendored(self) -> None:
+        # A local-first tool should not depend on a third-party CDN at runtime.
+        self.assertIn('href="/vendor/leaflet.css"', self.html)
+        self.assertIn('src="/vendor/leaflet.js"', self.html)
+        self.assertIn('src="/vendor/leaflet-heat.js"', self.html)
+        self.assertNotIn("unpkg.com", self.html)
+        for asset in ("leaflet.js", "leaflet.css", "leaflet-heat.js"):
+            self.assertTrue((ROOT / "web" / "vendor" / asset).is_file(), asset)
+
     def test_shell_has_map_search_and_feed(self) -> None:
         for needle in (
             'id="map"',

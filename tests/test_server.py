@@ -67,6 +67,10 @@ class ApiServerTest(unittest.TestCase):
         status, _, css = self._get("/styles.css")
         self.assertEqual(status, 200)
         self.assertIn(b"backdrop-filter", css)
+        for asset in ("leaflet.js", "leaflet.css", "leaflet-heat.js"):
+            status, _, body = self._get(f"/vendor/{asset}")
+            self.assertEqual(status, 200, asset)
+            self.assertGreater(len(body), 1000, asset)
 
     def test_incidents_search_param_filters_server_side(self) -> None:
         _, _, body = self._get("/api/incidents?window=24h&q=traffic")
