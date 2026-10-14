@@ -9,6 +9,14 @@ class CategorizeTest(unittest.TestCase):
         self.assertEqual(categorize("FIGHT NO WEAPON")[0], "violence")
         self.assertEqual(categorize("PERSON W/GUN")[0], "violence")
 
+    def test_stab_needle_does_not_match_established(self) -> None:
+        # "STAB" matched inside "ESTABLISHED" / "STABILIZE".
+        for desc in ("ESTABLISHED", "STABILIZE", "ESTABLISHING CONTACT"):
+            self.assertNotEqual(categorize(desc)[0], "violence", desc)
+        self.assertEqual(categorize("STABBING")[0], "violence")
+        self.assertEqual(categorize("STABBED SUSPECT")[0], "violence")
+        self.assertEqual(categorize("STAB WOUND")[0], "violence")
+
     def test_traffic_stops_are_hotspot_signal_not_routine(self) -> None:
         for desc in ("TRAFFIC STOP", "TRAF VIOLATION CITE", "TRAF VIOLATION TOW"):
             category, routine, weight = categorize(desc)
