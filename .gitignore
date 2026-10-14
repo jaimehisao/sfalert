@@ -14,3 +14,4 @@ dist/
 *.egg-info/
 .coverage
 coverage.xml
+uv.lock
