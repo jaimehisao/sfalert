@@ -84,6 +84,12 @@ class ApiServerTest(unittest.TestCase):
         self.assertGreaterEqual(stats["total"], 1)
         self.assertEqual(stats["hotspots"][0]["n"], 1)
 
+    def test_meta_includes_90d_window(self) -> None:
+        _, _, body = self._get("/api/meta")
+        meta = json.loads(body)
+        self.assertIn("90d", meta["windows"])
+        self.assertEqual(meta["windows"][-1], "90d")
+
     def test_unknown_api_is_404(self) -> None:
         with self.assertRaises(HTTPError) as ctx:
             urlopen(self.base + "/api/nope", timeout=5)

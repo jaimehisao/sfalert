@@ -40,7 +40,7 @@ Locations are snapped to intersections by the city. Sensitive calls often have n
 
 - **Hide routine** — drops passing calls, prisoner transport, etc. Does **not** drop traffic stops.
 - Category chips — violence, theft, traffic, welfare, …
-- Time window — 3h through 30d
+- Time window — 3h through 90d
 - District — SFPD districts
 
 ## Tests

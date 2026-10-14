@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlparse
 from . import ingest as ingest_mod
 from .categories import category_meta
 from .db import ROOT, connect
-from .query import heatmap_points, list_incidents, stats
+from .query import WINDOWS, heatmap_points, list_incidents, stats
 
 WEB_DIR = ROOT / "web"
 POLL_SECONDS = 120
@@ -102,7 +102,7 @@ class Handler(SimpleHTTPRequestHandler):
                 )
                 return
             if path == "/api/meta":
-                self._json({"categories": category_meta(), "windows": list(_WINDOWS)})
+                self._json({"categories": category_meta(), "windows": list(WINDOWS)})
                 return
             self._json({"error": "not found"}, 404)
         except Exception as exc:
@@ -126,9 +126,6 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
-
-
-_WINDOWS = ["3h", "6h", "12h", "24h", "7d", "30d"]
 
 
 def _poll_forever(stop: threading.Event) -> None:

@@ -21,6 +21,7 @@ class WebUiTest(unittest.TestCase):
             "SFALERT",
         ):
             self.assertIn(needle, self.html)
+        self.assertIn('data-window="90d"', self.html)
         self.assertNotIn("citizen", self.html.lower())
 
     def test_overlay_chrome_not_page_header_layout(self) -> None:

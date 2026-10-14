@@ -75,6 +75,7 @@ class QueryTest(unittest.TestCase):
     def test_window_start_is_ordered(self) -> None:
         self.assertGreater(window_start("3h"), window_start("24h"))
         self.assertGreater(window_start("24h"), window_start("7d"))
+        self.assertGreater(window_start("30d"), window_start("90d"))
 
     def test_hide_routine_keeps_traffic_stops_out_of_passing_calls(self) -> None:
         hidden = list_incidents(self.conn, window="24h", hide_routine=True)
