@@ -73,3 +73,11 @@ class CategorizeTest(unittest.TestCase):
         ids = {row["id"] for row in category_meta()}
         self.assertIn("traffic", ids)
         self.assertIn("violence", ids)
+
+    def test_routine_call_that_matches_a_rule_keeps_weight_one(self) -> None:
+        # "TOW TRUCK" hits the traffic rules but is routine -> weight drops.
+        self.assertEqual(categorize("TOW TRUCK"), ("traffic", True, 1))
+
+    def test_routine_without_category_rule_is_other(self) -> None:
+        # Covers the trailing "routine but nothing matched" branch.
+        self.assertEqual(categorize("MUNI INSPECTION"), ("other", True, 1))

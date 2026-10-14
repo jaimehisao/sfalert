@@ -9,7 +9,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from sfalert.db import connect, upsert_incidents
-from sfalert.server import Handler
+from sfalert.server import Handler, _poll_forever, serve
 
 from tests.helpers import incident_row
 
@@ -149,6 +149,31 @@ class ApiServerTest(unittest.TestCase):
         srv._last_refresh = real_time.time() - 20  # window has passed
         self.assertEqual(post(), 200)
 
+    @patch("sfalert.ingest.ingest", side_effect=RuntimeError("feed down"))
+    def test_refresh_failure_is_500_and_hides_detail(self, _ingest) -> None:
+        import time as real_time
+
+        import sfalert.server as srv
+
+        srv._last_refresh = real_time.time() - 100  # clear the rate limit
+        req = Request(self.base + "/api/refresh", method="POST")
+        with self.assertRaises(HTTPError) as ctx:
+            urlopen(req, timeout=5)
+        err = ctx.exception
+        try:
+            self.assertEqual(err.code, 500)
+            payload = json.loads(err.read())
+        finally:
+            err.close()
+        self.assertEqual(payload["error"], "refresh failed")
+        self.assertNotIn("feed down", payload["error"])
+
+    def test_unknown_post_path_is_404(self) -> None:
+        req = Request(self.base + "/api/nope", method="POST")
+        with self.assertRaises(HTTPError) as ctx:
+            urlopen(req, timeout=5)
+        self.assertEqual(ctx.exception.code, 404)
+
     def test_unknown_api_is_404(self) -> None:
         with self.assertRaises(HTTPError) as ctx:
             urlopen(self.base + "/api/nope", timeout=5)
@@ -188,3 +213,40 @@ class ApiServerTest(unittest.TestCase):
             payload = json.loads(resp.read())
         self.assertEqual(payload["realtime"], 1)
         ingest.assert_called_once()
+
+
+class ServeTest(unittest.TestCase):
+    @patch("sfalert.server.ThreadingHTTPServer.serve_forever", side_effect=KeyboardInterrupt)
+    def test_serve_stops_cleanly_on_interrupt(self, _forever) -> None:
+        serve(host="127.0.0.1", port=0, poll=False)  # must not raise
+
+    @patch("sfalert.ingest.ingest")
+    @patch(
+        "sfalert.server.ThreadingHTTPServer.serve_forever", side_effect=KeyboardInterrupt
+    )
+    def test_serve_starts_and_stops_the_poll_thread(self, _forever, ingest) -> None:
+        # stop is set in serve()'s finally block before the poll thread ever
+        # waits out its interval, so no ingest may happen.
+        serve(host="127.0.0.1", port=0, poll=True)
+        ingest.assert_not_called()
+
+    def test_poll_forever_ingests_each_tick_and_swallows_errors(self) -> None:
+        import sfalert.server as srv
+
+        class TwoTicksEvent:
+            """Stands in for threading.Event: False, False, then True."""
+
+            def __init__(self) -> None:
+                self.waits = 0
+
+            def wait(self, timeout: float) -> bool:
+                self.waits += 1
+                return self.waits > 2
+
+            def set(self) -> None:
+                return None
+
+        with patch.object(srv, "ingest_mod") as ingest_mod:
+            ingest_mod.ingest.side_effect = [None, RuntimeError("feed down")]
+            srv._poll_forever(TwoTicksEvent())
+        self.assertEqual(ingest_mod.ingest.call_count, 2)

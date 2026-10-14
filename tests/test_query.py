@@ -134,6 +134,21 @@ class QueryTest(unittest.TestCase):
         rows = list_incidents(self.conn, window="30d", q="TRAFFIC STOP")
         self.assertEqual({r["cad_number"] for r in rows}, {"stop-1", "stop-2"})
 
+    def test_heatmap_empty_without_mapped_incidents(self) -> None:
+        # Covers the max_w fallback when the filtered set has no geometry.
+        points = heatmap_points(self.conn, window="24h", district="TENDERLOIN")
+        self.assertEqual(points, [])
+
+    def test_status_filter_selects_open_or_closed(self) -> None:
+        # The UI's "Open" switch is backed by this parameter.
+        open_rows = list_incidents(self.conn, window="30d", status="open")
+        self.assertEqual({r["cad_number"] for r in open_rows}, {"stop-1"})
+        closed = list_incidents(self.conn, window="30d", status="closed")
+        self.assertEqual({r["cad_number"] for r in closed}, {"stop-2", "old-1"})
+        # Unknown values are ignored rather than treated as a blanket filter.
+        ignored = list_incidents(self.conn, window="30d", status="banana")
+        self.assertEqual({r["cad_number"] for r in ignored}, {"stop-1", "stop-2", "old-1"})
+
     def test_category_and_district_filters(self) -> None:
         rows = list_incidents(
             self.conn, window="30d", category="violence", hide_routine=True

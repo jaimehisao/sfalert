@@ -1,10 +1,13 @@
 import json
+import os
 import unittest
 from io import BytesIO
 from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 
 from sfalert.fetch import (
+    _headers,
+    _truthy,
     fetch_realtime,
     iso_days_ago,
     iter_closed,
@@ -101,6 +104,13 @@ class NormalizeTest(unittest.TestCase):
         self.assertEqual(row["routine"], 1)
 
 
+    def test_truthy_handles_flag_values(self) -> None:
+        for value in (True, 1, "true", "Y", "YES", "1"):
+            self.assertEqual(_truthy(value), 1, value)
+        for value in (False, 0, None, "N", "", "0", "n"):
+            self.assertEqual(_truthy(value), 0, value)
+
+
 class SodaClientTest(unittest.TestCase):
     @patch("sfalert.fetch.urllib.request.urlopen")
     def test_soda_get_parses_list(self, urlopen) -> None:
@@ -140,13 +150,31 @@ class SodaClientTest(unittest.TestCase):
         self.assertEqual(urlopen.call_count, 2)
         sleep.assert_called_once()
 
+    @patch.dict(os.environ, {"SFALERT_APP_TOKEN": "tok123"})
+    def test_headers_include_app_token(self) -> None:
+        self.assertEqual(_headers()["X-App-Token"], "tok123")
+
+    @patch.dict(os.environ, {}, clear=True)
+    def test_headers_without_token(self) -> None:
+        self.assertNotIn("X-App-Token", _headers())
+
+    @patch("sfalert.fetch.soda_get")
+    def test_iter_closed_stops_on_empty_first_page(self, soda_get_mock) -> None:
+        soda_get_mock.return_value = []
+        with patch("sfalert.fetch.PAGE_SIZE", 2):
+            self.assertEqual(list(iter_closed(days=1)), [])
+
     @patch("sfalert.fetch.soda_get")
     def test_iter_closed_paginates(self, soda_get_mock) -> None:
-        soda_get_mock.side_effect = [[{"cad_number": "a"}] * 2, []]
+        # page1 is full (== patched PAGE_SIZE) so iteration continues;
+        # page2 is short, which ends the stream.
+        soda_get_mock.side_effect = [
+            [{"cad_number": "a"}, {"cad_number": "b"}],
+            [{"cad_number": "c"}],
+        ]
         with patch("sfalert.fetch.PAGE_SIZE", 2):
             batches = list(iter_closed(days=1))
-        self.assertEqual(len(batches), 1)
-        self.assertEqual(len(batches[0]), 2)
+        self.assertEqual([len(b) for b in batches], [2, 1])
 
     @patch("sfalert.fetch.soda_get")
     def test_fetch_realtime_stops_on_short_page(self, soda_get_mock) -> None:
@@ -154,6 +182,34 @@ class SodaClientTest(unittest.TestCase):
         rows = fetch_realtime()
         self.assertEqual(len(rows), 1)
         soda_get_mock.assert_called_once()
+
+    @patch("sfalert.fetch.soda_get")
+    def test_fetch_realtime_paginates_full_pages(self, soda_get_mock) -> None:
+        full_page = [{"cad_number": str(i)} for i in range(50000)]
+        soda_get_mock.side_effect = [full_page, []]
+        rows = fetch_realtime()
+        self.assertEqual(len(rows), 50000)
+        self.assertEqual(soda_get_mock.call_count, 2)
+
+    @patch("sfalert.fetch.time.sleep")
+    @patch("sfalert.fetch.urllib.request.urlopen")
+    def test_soda_get_rejects_socrata_error_payload(self, urlopen, _sleep) -> None:
+        # A fresh response per attempt: error payloads are retried, and a
+        # reused BytesIO would be exhausted by then.
+        urlopen.side_effect = lambda *a, **k: FakeResponse(
+            {"error": True, "message": "query too big"}
+        )
+        with self.assertRaises(RuntimeError):
+            soda_get("https://example.test/data.json", {})
+        self.assertEqual(urlopen.call_count, 4)
+
+    @patch("sfalert.fetch.time.sleep")
+    @patch("sfalert.fetch.urllib.request.urlopen")
+    def test_soda_get_rejects_non_list_payload(self, urlopen, _sleep) -> None:
+        urlopen.side_effect = lambda *a, **k: FakeResponse({"not": "a list"})
+        with self.assertRaises(RuntimeError):
+            soda_get("https://example.test/data.json", {})
+        self.assertEqual(urlopen.call_count, 4)
 
     def test_iso_days_ago_format(self) -> None:
         stamp = iso_days_ago(7)
