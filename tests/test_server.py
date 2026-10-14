@@ -115,6 +115,20 @@ class ApiServerTest(unittest.TestCase):
             err.close()
         self.assertEqual(payload["error"], "not found")
 
+    @patch("sfalert.server.list_incidents", side_effect=RuntimeError("secret detail"))
+    def test_500_response_hides_internals(self, _list_incidents) -> None:
+        req = Request(self.base + "/api/incidents", method="GET")
+        with self.assertRaises(HTTPError) as ctx:
+            urlopen(req, timeout=5)
+        err = ctx.exception
+        try:
+            self.assertEqual(err.code, 500)
+            payload = json.loads(err.read())
+        finally:
+            err.close()
+        self.assertEqual(payload["error"], "internal server error")
+        self.assertNotIn("secret detail", payload["error"])
+
     @patch("sfalert.ingest.ingest", return_value={"realtime": 1, "total": 2})
     def test_refresh_posts_to_ingest(self, ingest) -> None:
         req = Request(self.base + "/api/refresh", method="POST")

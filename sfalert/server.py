@@ -113,7 +113,11 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             self._json({"error": "not found"}, 404)
         except Exception as exc:
-            self._json({"error": str(exc)}, 500)
+            # Detail stays in the server console; the browser gets a generic
+            # message. The container binds 0.0.0.0, so exception strings
+            # (SQLite paths, driver internals) are not for public clients.
+            print(f"{self.address_string()} {path} failed: {exc}")
+            self._json({"error": "internal server error"}, 500)
         finally:
             conn.close()
 
