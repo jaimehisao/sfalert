@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sfalert"
+dynamic = ["version"]
+description = "Local San Francisco CAD store, live map, and heatmap."
+readme = "README.md"
+requires-python = ">=3.11"
+# Stdlib only - no runtime dependencies.
+
+[tool.setuptools]
+packages = ["sfalert"]
+
+[tool.setuptools.dynamic]
+version = {attr = "sfalert.__version__"}

@@ -14,6 +14,8 @@ Python 3.11+ , stdlib only.
 python -m sfalert
 ```
 
+Or install it (`pip install .`) and run `sfalert` from anywhere.
+
 That backfills ~30 days of closed calls, snapshots the real-time 48h window, then serves:
 
 [http://127.0.0.1:8765](http://127.0.0.1:8765)
