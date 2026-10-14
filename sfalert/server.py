@@ -16,6 +16,13 @@ from .query import WINDOWS, heatmap_points, list_incidents, stats
 WEB_DIR = ROOT / "web"
 POLL_SECONDS = 120
 
+# Manual refreshes are open to anyone who can reach the server (the
+# container binds 0.0.0.0); the ingest itself is locked and pull-only, so a
+# small rate limit is enough to blunt abuse.
+REFRESH_MIN_INTERVAL = 15.0
+_refresh_lock = threading.Lock()
+_last_refresh = 0.0
+
 
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
@@ -36,13 +43,22 @@ class Handler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self) -> None:
+        global _last_refresh
+
         parsed = urlparse(self.path)
         if parsed.path == "/api/refresh":
+            now = time.time()
+            with _refresh_lock:
+                if now - _last_refresh < REFRESH_MIN_INTERVAL:
+                    self._json({"error": "refresh rate limited"}, 429)
+                    return
+                _last_refresh = now
             try:
                 result = ingest_mod.ingest(days=30, realtime=True, backfill=False)
                 self._json(result)
             except Exception as exc:
-                self._json({"error": str(exc)}, 500)
+                print(f"manual refresh failed: {exc}")
+                self._json({"error": "refresh failed"}, 500)
             return
         self._json({"error": "not found"}, 404)
 

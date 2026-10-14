@@ -104,6 +104,36 @@ class ApiServerTest(unittest.TestCase):
         _, _, body = self._get("/api/incidents?limit=100000")
         self.assertLessEqual(len(json.loads(body)), 500)
 
+    @patch("sfalert.ingest.ingest", return_value={"realtime": 1, "total": 2})
+    def test_refresh_is_rate_limited(self, ingest) -> None:
+        import time as real_time
+
+        import sfalert.server as srv
+
+        def post() -> int:
+            req = Request(self.base + "/api/refresh", method="POST")
+            with urlopen(req, timeout=5) as resp:
+                return resp.status
+
+        def expect_429() -> None:
+            try:
+                post()
+                self.fail("expected 429")
+            except HTTPError as err:
+                try:
+                    self.assertEqual(err.code, 429)
+                finally:
+                    err.close()
+
+        srv._last_refresh = real_time.time() - 100  # state shared with other tests
+        self.assertEqual(post(), 200)
+        ingest.assert_called_once()
+
+        expect_429()  # inside the 15s window
+
+        srv._last_refresh = real_time.time() - 20  # window has passed
+        self.assertEqual(post(), 200)
+
     def test_unknown_api_is_404(self) -> None:
         with self.assertRaises(HTTPError) as ctx:
             urlopen(self.base + "/api/nope", timeout=5)
@@ -131,6 +161,13 @@ class ApiServerTest(unittest.TestCase):
 
     @patch("sfalert.ingest.ingest", return_value={"realtime": 1, "total": 2})
     def test_refresh_posts_to_ingest(self, ingest) -> None:
+        # The limiter keeps module-level state; reset so this test is
+        # independent of test ordering.
+        import time as real_time
+
+        import sfalert.server as srv
+
+        srv._last_refresh = real_time.time() - 100
         req = Request(self.base + "/api/refresh", method="POST")
         with urlopen(req, timeout=5) as resp:
             payload = json.loads(resp.read())
