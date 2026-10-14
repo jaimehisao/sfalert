@@ -68,6 +68,17 @@ class ApiServerTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn(b"backdrop-filter", css)
 
+    def test_incidents_search_param_filters_server_side(self) -> None:
+        _, _, body = self._get("/api/incidents?window=24h&q=traffic")
+        rows = json.loads(body)
+        self.assertEqual([r["cad_number"] for r in rows], ["api-1"])
+        _, _, body = self._get("/api/incidents?window=24h&q=nothingmatches")
+        self.assertEqual(json.loads(body), [])
+        # Search still respects Skip noise - turn it off to find routine calls.
+        _, _, body = self._get("/api/incidents?window=24h&q=passing&hide_routine=0")
+        rows = json.loads(body)
+        self.assertEqual([r["cad_number"] for r in rows], ["api-pass"])
+
     def test_incidents_hide_routine_by_default(self) -> None:
         _, _, body = self._get("/api/incidents?window=24h")
         rows = json.loads(body)

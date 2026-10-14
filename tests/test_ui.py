@@ -33,6 +33,8 @@ class WebUiTest(unittest.TestCase):
     def test_js_escapes_html_and_keeps_url_state(self) -> None:
         self.assertIn("function escapeHtml", self.js)
         self.assertIn("searchParams", self.js)
-        self.assertIn("visibleIncidents", self.js)
+        # Search must be sent to the server, not filtered client-side.
+        self.assertIn('p.set("q", state.q.trim())', self.js)
+        self.assertNotIn("visibleIncidents", self.js)
         self.assertIn("renderDetail", self.js)
         self.assertNotIn("citizen", self.js.lower())

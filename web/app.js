@@ -35,13 +35,17 @@ function street(name) {
 }
 
 function qs() {
+  const searching = state.q.trim().length > 0;
   const p = new URLSearchParams({
     window: state.window,
     hide_routine: state.hideRoutine ? "1" : "0",
+    // Search covers the whole store, so allow deeper results while typing.
+    limit: searching ? "500" : "250",
   });
   if (state.category) p.set("category", state.category);
   if (state.district) p.set("district", state.district);
   if (state.openOnly) p.set("status", "open");
+  if (searching) p.set("q", state.q.trim());
   return p.toString();
 }
 
@@ -87,18 +91,6 @@ function relTime(iso) {
 
 function colorFor(cat) {
   return COLORS[cat] || "#64748b";
-}
-
-function visibleIncidents() {
-  const q = state.q.trim().toLowerCase();
-  if (!q) return state.incidents;
-  return state.incidents.filter((it) => {
-    const blob = [
-      it.call_type_final_desc, it.intersection, it.neighborhood,
-      it.district, it.cad_number, it.agency,
-    ].join(" ").toLowerCase();
-    return blob.includes(q);
-  });
 }
 
 function setPressed(id, on) {
@@ -299,7 +291,10 @@ function focusCad(cad) {
 }
 
 function paintLocal() {
-  const items = visibleIncidents();
+  // Filtering happens server-side (see qs(): q=...), so the fetched rows
+  // are exactly the visible set - even across the whole store, not just
+  // the 250 newest.
+  const items = state.incidents;
   renderFeed(items);
   renderPins(items);
   if (state.selected) {
@@ -318,7 +313,7 @@ async function reload() {
   setPressed("hideRoutine", state.hideRoutine);
   try {
     const [incidents, heat, stats] = await Promise.all([
-      getJSON(`/api/incidents?${qs()}&limit=250`),
+      getJSON(`/api/incidents?${qs()}`),
       getJSON(`/api/heatmap?${qs()}`),
       getJSON(`/api/stats?${qs()}`),
     ]);
@@ -351,7 +346,7 @@ document.getElementById("heatmap").onclick = () => {
 document.getElementById("pins").onclick = () => {
   state.pins = !state.pins;
   setPressed("pins", state.pins);
-  renderPins(visibleIncidents());
+  renderPins(state.incidents);
 };
 document.getElementById("openOnly").onclick = () => {
   state.openOnly = !state.openOnly;
@@ -361,10 +356,13 @@ document.getElementById("hideRoutine").onclick = () => {
   state.hideRoutine = !state.hideRoutine;
   reload();
 };
+let qTimer = null;
 document.getElementById("q").addEventListener("input", (e) => {
   state.q = e.target.value;
   writeUrl();
-  paintLocal();
+  // Debounce: search runs server-side over the whole store.
+  clearTimeout(qTimer);
+  qTimer = setTimeout(reload, 200);
 });
 document.getElementById("refresh").onclick = async () => {
   document.getElementById("statusLine").textContent = "syncing CAD…";

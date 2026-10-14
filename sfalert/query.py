@@ -49,6 +49,21 @@ def _filters(
     return " AND ".join(clauses), args
 
 
+_LIKE_COLUMNS = (
+    "call_type_final_desc",
+    "intersection",
+    "neighborhood",
+    "district",
+    "cad_number",
+    "agency",
+)
+
+
+def _escape_like(value: str) -> str:
+    """Escape LIKE wildcards so user input is matched literally."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def list_incidents(
     conn: sqlite3.Connection,
     window: str = "24h",
@@ -57,8 +72,14 @@ def list_incidents(
     hide_routine: bool = True,
     status: str | None = None,
     limit: int = 200,
+    q: str | None = None,
 ) -> list[dict[str, Any]]:
     where, args = _filters(window, category, district, hide_routine, status)
+    if q:
+        like = f"%{_escape_like(q)}%"
+        clauses = [f"{col} LIKE ? ESCAPE '\\'" for col in _LIKE_COLUMNS]
+        where += " AND (" + " OR ".join(clauses) + ")"
+        args.extend([like] * len(_LIKE_COLUMNS))
     sql = f"""
         SELECT cad_number, received_datetime, dispatch_datetime, onscene_datetime,
                close_datetime, call_type_final_desc, priority, agency, intersection,

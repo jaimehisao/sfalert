@@ -77,6 +77,7 @@ class Handler(SimpleHTTPRequestHandler):
         category = one("category")
         district = one("district")
         status = one("status")
+        q = one("q")
         hide_routine = one("hide_routine", "1") != "0"
         try:
             limit = int(one("limit", "200") or "200")
@@ -97,6 +98,7 @@ class Handler(SimpleHTTPRequestHandler):
                         hide_routine=hide_routine,
                         status=status,
                         limit=limit,
+                        q=q,
                     )
                 )
                 return

@@ -111,6 +111,29 @@ class QueryTest(unittest.TestCase):
         self.assertEqual(cats.get("traffic"), 2)
         self.assertNotIn("other", cats)
 
+    def test_search_filters_across_the_store(self) -> None:
+        rows = list_incidents(self.conn, window="30d", q="assault")
+        self.assertEqual([r["cad_number"] for r in rows], ["old-1"])
+        rows = list_incidents(self.conn, window="30d", q="market")
+        self.assertEqual(
+            {r["cad_number"] for r in rows}, {"stop-1", "stop-2", "old-1"}
+        )
+        rows = list_incidents(self.conn, window="30d", q="traffic stop")
+        self.assertEqual({r["cad_number"] for r in rows}, {"stop-1", "stop-2"})
+        rows = list_incidents(self.conn, window="30d", q="southern")
+        self.assertEqual(
+            {r["cad_number"] for r in rows}, {"stop-1", "stop-2", "old-1"}
+        )
+        rows = list_incidents(self.conn, window="30d", q="haight", hide_routine=False)
+        self.assertEqual([r["cad_number"] for r in rows], ["pass-1"])
+
+    def test_search_escapes_like_wildcards(self) -> None:
+        # "%" and "_" in user input must match literally, not as wildcards.
+        self.assertEqual(list_incidents(self.conn, window="30d", q="100%"), [])
+        self.assertEqual(list_incidents(self.conn, window="30d", q="MARKET_"), [])
+        rows = list_incidents(self.conn, window="30d", q="TRAFFIC STOP")
+        self.assertEqual({r["cad_number"] for r in rows}, {"stop-1", "stop-2"})
+
     def test_category_and_district_filters(self) -> None:
         rows = list_incidents(
             self.conn, window="30d", category="violence", hide_routine=True
