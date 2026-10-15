@@ -11,6 +11,7 @@ to capture the real thing.
 Requires no install - uv fetches playwright on demand:
 
     uv run --with playwright -- python tools/screenshot.py --out /tmp/ui.png
+    uv run --with playwright -- python tools/screenshot.py --tiles esri --out /tmp/ui.png
 
     # a specific state and viewport
     uv run --with playwright -- python tools/screenshot.py \
@@ -26,6 +27,7 @@ you can also hand to a reviewer to reproduce.
 from __future__ import annotations
 
 import argparse
+import re
 import socket
 import subprocess
 import sys
@@ -33,8 +35,27 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CARTO = "basemaps.cartocdn.com"
-OSM = "tile.openstreetmap.org"
+CARTO_HOST = "basemaps.cartocdn.com"
+OSM_HOST = "tile.openstreetmap.org"
+ESRI = "esri"
+ESRI_SERVICE = (
+    "https://server.arcgisonline.com/ArcGIS/rest/services"
+    "/Canvas/World_Dark_Gray_Base/MapServer/tile"
+)
+
+# CARTO tile paths are /{style}/{z}/{x}/{y}{@2x}.png; Esri wants /{z}/{y}/{x}.
+_CARTO_HOST_RE = re.compile(r"//[a-d]\.basemaps\.cartocdn\.com/")
+_CARTO_PATH_RE = re.compile(r"/[^/]+/(\d+)/(\d+)/(\d+)(?:@2x)?\.png")
+
+
+def _swap_tiles(host: str, url: str) -> str:
+    if host == ESRI:
+        match = _CARTO_PATH_RE.search(url)
+        if not match:
+            return url
+        z, x, y = match.groups()
+        return f"{ESRI_SERVICE}/{z}/{y}/{x}"
+    return _CARTO_HOST_RE.sub(f"//{host}/", url)
 
 
 def _free_port() -> int:
@@ -84,7 +105,13 @@ def main() -> None:
     parser.add_argument("--open-only", action="store_true")
     parser.add_argument("--noise", action="store_true", help="show routine calls")
     parser.add_argument("--view", choices=("desktop", "mobile"), default="desktop")
-    parser.add_argument("--keep-tiles", action="store_true", help="do not swap CARTO for OSM")
+    parser.add_argument(
+        "--tiles",
+        choices=("osm", "esri"),
+        default="osm",
+        help="keyless basemap to render with; pass an empty value for the app default",
+    )
+    parser.add_argument("--keep-tiles", action="store_true", help="do not swap CARTO")
     parser.add_argument("--wait", type=int, default=1200, help="settle time after load (ms)")
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
@@ -121,16 +148,13 @@ def main() -> None:
             browser = pw.chromium.launch(headless=True, args=["--no-sandbox"])
             page = browser.new_page(viewport=size)
             if not args.keep_tiles:
-                import re
-
-                carto_re = re.compile(r"//[a-d]\.basemaps\.cartocdn\.com/")
-
-                def swap_tiles(route, request):
-                    # Rewrite the tile host only; the path (z/x/y) is identical.
-                    rewritten = carto_re.sub(f"//{OSM}/", request.url)
-                    route.continue_(url=rewritten)
-
-                page.route(carto_re, swap_tiles)
+                host = OSM_HOST if args.tiles == "osm" else ESRI
+                page.route(
+                    _CARTO_HOST_RE,
+                    lambda route, request: route.continue_(
+                        url=_swap_tiles(host, request.url)
+                    ),
+                )
             errors: list[str] = []
             page.on("pageerror", lambda exc: errors.append(str(exc)))
             page.goto(url, wait_until="networkidle")

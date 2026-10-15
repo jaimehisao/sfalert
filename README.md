@@ -75,9 +75,10 @@ uv run --with playwright -- python tools/screenshot.py \
 
 Flags mirror the app's own URL state (`--window`, `--category`,
 `--district`, `--search`, `--open-only`, `--noise`, `--view`). Basemap tiles are
-rewritten to OpenStreetMap so output is deterministic — CARTO answers
-anonymous tile bursts with an “API KEY REQUIRED” watermark — and
-`--keep-tiles` disables the swap.
+rewritten to a keyless provider so output is deterministic — CARTO answers
+anonymous tile bursts with an “API KEY REQUIRED” watermark. Use `--tiles osm`
+(OpenStreetMap, light) or `--tiles esri` (Esri Dark Gray Canvas, dark) to
+compare looks, and `--keep-tiles` to render the app's default unchanged.
 
 GitHub Actions runs the same target on `ubuntu-latest` (`push` to `main` and pull requests). Pushes to `main` and `v*` tags also publish a container image to GHCR:
 
