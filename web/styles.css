@@ -102,6 +102,7 @@ button { cursor: pointer; }
 .search input:focus { border-color: var(--sodium); }
 
 .field { display: flex; flex-direction: column; gap: 2px; font-size: 10px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+.field.basemap select { min-width: 132px; }
 .field select {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--line);

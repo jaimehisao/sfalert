@@ -115,6 +115,21 @@ class ApiServerTest(unittest.TestCase):
         self.assertIn("90d", meta["windows"])
         self.assertEqual(meta["windows"][-1], "90d")
 
+    def test_meta_lists_basemaps_with_an_offline_option(self) -> None:
+        _, _, body = self._get("/api/meta")
+        meta = json.loads(body)
+        ids = [row["id"] for row in meta["basemaps"]]
+        self.assertIn("none", ids)
+        self.assertIn("esri-dark", ids)
+        self.assertEqual(set(meta["basemap"]), {"id", "label", "url", "subdomains", "attribution"})
+
+    @patch.dict("os.environ", {"SFALERT_BASEMAP": "none"})
+    def test_meta_honors_env_basemap(self) -> None:
+        _, _, body = self._get("/api/meta")
+        meta = json.loads(body)
+        self.assertEqual(meta["basemap"]["id"], "none")
+        self.assertIsNone(meta["basemap"]["url"])
+
     def test_unknown_window_is_400(self) -> None:
         with self.assertRaises(HTTPError) as ctx:
             urlopen(self.base + "/api/incidents?window=5min", timeout=5)

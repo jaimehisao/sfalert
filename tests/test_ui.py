@@ -33,6 +33,14 @@ class WebUiTest(unittest.TestCase):
         self.assertIn('data-window="90d"', self.html)
         self.assertNotIn("citizen", self.html.lower())
 
+    def test_basemap_selector_is_configurable(self) -> None:
+        self.assertIn('id="basemap"', self.html)
+        # The tile layer must be data-driven from /api/meta, not hardcoded.
+        self.assertNotIn("basemaps.cartocdn.com", self.js)
+        self.assertIn("applyBasemap", self.js)
+        self.assertIn("/api/meta", self.js)
+        self.assertIn("basemap", self.js)
+
     def test_overlay_chrome_not_page_header_layout(self) -> None:
         self.assertIn("position: absolute", self.css)
         self.assertIn("backdrop-filter", self.css)

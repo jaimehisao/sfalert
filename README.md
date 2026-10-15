@@ -30,6 +30,30 @@ python -m sfalert serve               # map UI + poll every 2 min
 
 Data lives in `data/sfalert.db`. Optional Socrata token: `SFALERT_APP_TOKEN`.
 
+## Basemap tiles
+
+The map draws incident data locally; only basemap tiles come from the
+internet. The provider is configurable, trading looks against privacy and
+availability:
+
+| `SFALERT_BASEMAP` | Provider | Notes |
+|---|---|---|
+| `carto-dark` *(default)* | CARTO dark | long-standing look; anonymous tile bursts can get rate-limited (the map shows "API KEY REQUIRED" watermarks) |
+| `esri-dark` | Esri Dark Gray Canvas | keyless, dark, street labels; closest look to the default |
+| `osm` | OpenStreetMap standard | keyless; light themed |
+| `none` | no basemap | **zero external requests** — pins and heatmap still work |
+
+The env var sets the default; `?basemap=osm` in the URL (or the **Map**
+selector in the top bar) overrides it per session. Every tile request
+reveals your IP and pan/zoom pattern to the provider, which is what
+`none` exists for. All four are HTTPS static raster tiles — none can
+execute script in the page. Docker:
+
+```bash
+docker run --rm -p 8765:8765 -e SFALERT_BASEMAP=esri-dark \
+  -v sfalert-data:/app/data ghcr.io/jaimehisao/sfalert:latest
+```
+
 ## What you are looking at
 
 | Source | Dataset | Cadence |

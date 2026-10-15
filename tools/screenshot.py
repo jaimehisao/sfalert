@@ -104,6 +104,11 @@ def main() -> None:
     parser.add_argument("--search", default=None, help="q parameter")
     parser.add_argument("--open-only", action="store_true")
     parser.add_argument("--noise", action="store_true", help="show routine calls")
+    parser.add_argument(
+        "--basemap",
+        default=None,
+        help="provider id to select (carto-dark, esri-dark, osm, none)",
+    )
     parser.add_argument("--view", choices=("desktop", "mobile"), default="desktop")
     parser.add_argument(
         "--tiles",
@@ -134,6 +139,8 @@ def main() -> None:
             params["open"] = "1"
         if args.noise:
             params["noise"] = "1"
+        if args.basemap:
+            params["basemap"] = args.basemap
         url = f"http://127.0.0.1:{port}/?{urlencode(params)}"
 
         size = (

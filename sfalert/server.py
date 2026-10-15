@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from . import ingest as ingest_mod
+from .basemaps import basemap_meta, provider, resolve
 from .categories import category_meta
 from .db import ROOT, connect
 from .query import WINDOWS, heatmap_points, list_incidents, stats
@@ -129,7 +130,14 @@ class Handler(SimpleHTTPRequestHandler):
                 )
                 return
             if path == "/api/meta":
-                self._json({"categories": category_meta(), "windows": list(WINDOWS)})
+                self._json(
+                    {
+                        "categories": category_meta(),
+                        "windows": list(WINDOWS),
+                        "basemaps": basemap_meta(),
+                        "basemap": provider(),
+                    }
+                )
                 return
             self._json({"error": "not found"}, 404)
         except Exception as exc:

@@ -8,6 +8,7 @@ const state = {
   pins: true,
   openOnly: false,
   q: "",
+  basemap: "",
   selected: null,
   incidents: [],
   stats: null,
@@ -15,14 +16,12 @@ const state = {
 
 const map = L.map("map", { zoomControl: false, attributionControl: true })
   .setView([37.7749, -122.4194], 13);
-L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-  attribution: "&copy; OpenStreetMap &copy; CARTO",
-  maxZoom: 19,
-}).addTo(map);
 L.control.zoom({ position: "bottomleft" }).addTo(map);
 
 const pinLayer = L.layerGroup().addTo(map);
 let heatLayer = null;
+let basemapLayer = null;
+let basemaps = [];
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (ch) => (
@@ -55,6 +54,7 @@ function readUrl() {
   state.category = u.searchParams.get("category") || "";
   state.district = u.searchParams.get("district") || "";
   state.q = u.searchParams.get("q") || "";
+  state.basemap = u.searchParams.get("basemap") || "";
   if (u.searchParams.get("open") === "1") state.openOnly = true;
   if (u.searchParams.get("noise") === "1") state.hideRoutine = false;
 }
@@ -66,6 +66,7 @@ function writeUrl() {
   set("category", state.category);
   set("district", state.district);
   set("q", state.q);
+  set("basemap", state.basemap);
   set("open", state.openOnly ? "1" : "");
   set("noise", state.hideRoutine ? "" : "1");
   history.replaceState(null, "", u);
@@ -91,6 +92,40 @@ function relTime(iso) {
 
 function colorFor(cat) {
   return COLORS[cat] || "#64748b";
+}
+
+function applyBasemap(id) {
+  state.basemap = id;
+  const sel = document.getElementById("basemap");
+  if (sel) sel.value = id;
+  const def = basemaps.find((b) => b.id === id) || basemaps[0];
+  if (basemapLayer) {
+    map.removeLayer(basemapLayer);
+    basemapLayer = null;
+  }
+  // "none" means no external tile requests at all: pins and heat still work.
+  if (!def || !def.url) return;
+  basemapLayer = L.tileLayer(def.url, {
+    attribution: def.attribution,
+    subdomains: def.subdomains || "abc",
+    maxZoom: 19,
+  }).addTo(map);
+}
+
+async function initBasemap() {
+  const meta = await getJSON("/api/meta");
+  basemaps = meta.basemaps || [];
+  const sel = document.getElementById("basemap");
+  sel.innerHTML = basemaps
+    .map((b) => `<option value="${escapeHtml(b.id)}">${escapeHtml(b.label)}</option>`)
+    .join("");
+  sel.onchange = () => {
+    applyBasemap(sel.value);
+    writeUrl();
+  };
+  // The server's default (SFALERT_BASEMAP) applies unless the URL says otherwise.
+  const wanted = state.basemap || meta.basemap?.id || "";
+  applyBasemap(basemaps.some((b) => b.id === wanted) ? wanted : (meta.basemap?.id || basemaps[0]?.id));
 }
 
 function setPressed(id, on) {
@@ -385,6 +420,7 @@ document.addEventListener("keydown", (e) => {
 
 readUrl();
 document.getElementById("q").value = state.q;
+initBasemap();
 reload();
 setInterval(() => {
   // Three API requests per tick is wasteful on a backgrounded tab.

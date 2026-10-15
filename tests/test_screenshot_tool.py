@@ -30,6 +30,7 @@ class ScreenshotToolTest(unittest.TestCase):
             "--search",
             "--open-only",
             "--noise",
+            "--basemap",
             "--view",
             "--out",
         ):
