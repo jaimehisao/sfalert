@@ -11,7 +11,16 @@ class MakefileTest(unittest.TestCase):
         self.text = (ROOT / "Makefile").read_text()
 
     def test_expected_targets_exist(self) -> None:
-        for target in ("help", "test", "ingest", "serve", "run", "docker", "clean"):
+        for target in (
+            "help",
+            "test",
+            "coverage",
+            "ingest",
+            "serve",
+            "run",
+            "docker",
+            "clean",
+        ):
             self.assertRegex(
                 self.text,
                 re.compile(rf"^{re.escape(target)}:", re.M),
@@ -27,8 +36,15 @@ class MakefileTest(unittest.TestCase):
         self.assertIn("unittest discover", out)
         self.assertIn("-s tests", out)
 
+    def test_coverage_target_gates_at_85(self) -> None:
+        out = subprocess.check_output(["make", "-n", "coverage"], cwd=ROOT, text=True)
+        self.assertIn("coverage run", out)
+        self.assertIn("unittest discover", out)
+        self.assertIn("--fail-under=85", out)
+
     def test_help_prints_targets(self) -> None:
         out = subprocess.check_output(["make", "help"], cwd=ROOT, text=True)
         self.assertIn("make test", out)
+        self.assertIn("make coverage", out)
         self.assertIn("make serve", out)
         self.assertIn("make docker", out)

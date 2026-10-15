@@ -9,12 +9,20 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from . import ingest as ingest_mod
+from .basemaps import basemap_meta, provider, resolve
 from .categories import category_meta
 from .db import ROOT, connect
-from .query import heatmap_points, list_incidents, stats
+from .query import WINDOWS, heatmap_points, list_incidents, stats
 
 WEB_DIR = ROOT / "web"
 POLL_SECONDS = 120
+
+# Manual refreshes are open to anyone who can reach the server (the
+# container binds 0.0.0.0); the ingest itself is locked and pull-only, so a
+# small rate limit is enough to blunt abuse.
+REFRESH_MIN_INTERVAL = 15.0
+_refresh_lock = threading.Lock()
+_last_refresh = 0.0
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -36,13 +44,22 @@ class Handler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self) -> None:
+        global _last_refresh
+
         parsed = urlparse(self.path)
         if parsed.path == "/api/refresh":
+            now = time.time()
+            with _refresh_lock:
+                if now - _last_refresh < REFRESH_MIN_INTERVAL:
+                    self._json({"error": "refresh rate limited"}, 429)
+                    return
+                _last_refresh = now
             try:
                 result = ingest_mod.ingest(days=30, realtime=True, backfill=False)
                 self._json(result)
             except Exception as exc:
-                self._json({"error": str(exc)}, 500)
+                print(f"manual refresh failed: {exc}")
+                self._json({"error": "refresh failed"}, 500)
             return
         self._json({"error": "not found"}, 404)
 
@@ -55,11 +72,19 @@ class Handler(SimpleHTTPRequestHandler):
             return value or default
 
         window = one("window", "24h") or "24h"
+        if window not in WINDOWS:
+            self._json({"error": f"unknown window: {window}"}, 400)
+            return
         category = one("category")
         district = one("district")
         status = one("status")
+        q = one("q")
         hide_routine = one("hide_routine", "1") != "0"
-        limit = int(one("limit", "200") or "200")
+        try:
+            limit = int(one("limit", "200") or "200")
+        except ValueError:
+            self._json({"error": "limit must be an integer"}, 400)
+            return
         limit = max(1, min(limit, 500))
 
         conn = connect()
@@ -74,6 +99,7 @@ class Handler(SimpleHTTPRequestHandler):
                         hide_routine=hide_routine,
                         status=status,
                         limit=limit,
+                        q=q,
                     )
                 )
                 return
@@ -86,6 +112,7 @@ class Handler(SimpleHTTPRequestHandler):
                             category=category,
                             district=district,
                             hide_routine=hide_routine,
+                            q=q,
                         )
                     }
                 )
@@ -98,15 +125,27 @@ class Handler(SimpleHTTPRequestHandler):
                         category=category,
                         district=district,
                         hide_routine=hide_routine,
+                        q=q,
                     )
                 )
                 return
             if path == "/api/meta":
-                self._json({"categories": category_meta(), "windows": list(_WINDOWS)})
+                self._json(
+                    {
+                        "categories": category_meta(),
+                        "windows": list(WINDOWS),
+                        "basemaps": basemap_meta(),
+                        "basemap": provider(),
+                    }
+                )
                 return
             self._json({"error": "not found"}, 404)
         except Exception as exc:
-            self._json({"error": str(exc)}, 500)
+            # Detail stays in the server console; the browser gets a generic
+            # message. The container binds 0.0.0.0, so exception strings
+            # (SQLite paths, driver internals) are not for public clients.
+            print(f"{self.address_string()} {path} failed: {exc}")
+            self._json({"error": "internal server error"}, 500)
         finally:
             conn.close()
 
@@ -126,9 +165,6 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
-
-
-_WINDOWS = ["3h", "6h", "12h", "24h", "7d", "30d"]
 
 
 def _poll_forever(stop: threading.Event) -> None:

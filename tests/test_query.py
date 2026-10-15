@@ -75,6 +75,7 @@ class QueryTest(unittest.TestCase):
     def test_window_start_is_ordered(self) -> None:
         self.assertGreater(window_start("3h"), window_start("24h"))
         self.assertGreater(window_start("24h"), window_start("7d"))
+        self.assertGreater(window_start("30d"), window_start("90d"))
 
     def test_hide_routine_keeps_traffic_stops_out_of_passing_calls(self) -> None:
         hidden = list_incidents(self.conn, window="24h", hide_routine=True)
@@ -109,6 +110,61 @@ class QueryTest(unittest.TestCase):
         cats = {row["category"]: row["n"] for row in result["by_category"]}
         self.assertEqual(cats.get("traffic"), 2)
         self.assertNotIn("other", cats)
+
+    def test_search_filters_across_the_store(self) -> None:
+        rows = list_incidents(self.conn, window="30d", q="assault")
+        self.assertEqual([r["cad_number"] for r in rows], ["old-1"])
+        rows = list_incidents(self.conn, window="30d", q="market")
+        self.assertEqual(
+            {r["cad_number"] for r in rows}, {"stop-1", "stop-2", "old-1"}
+        )
+        rows = list_incidents(self.conn, window="30d", q="traffic stop")
+        self.assertEqual({r["cad_number"] for r in rows}, {"stop-1", "stop-2"})
+        rows = list_incidents(self.conn, window="30d", q="southern")
+        self.assertEqual(
+            {r["cad_number"] for r in rows}, {"stop-1", "stop-2", "old-1"}
+        )
+        rows = list_incidents(self.conn, window="30d", q="haight", hide_routine=False)
+        self.assertEqual([r["cad_number"] for r in rows], ["pass-1"])
+
+    def test_search_escapes_like_wildcards(self) -> None:
+        # "%" and "_" in user input must match literally, not as wildcards.
+        self.assertEqual(list_incidents(self.conn, window="30d", q="100%"), [])
+        self.assertEqual(list_incidents(self.conn, window="30d", q="MARKET_"), [])
+        rows = list_incidents(self.conn, window="30d", q="TRAFFIC STOP")
+        self.assertEqual({r["cad_number"] for r in rows}, {"stop-1", "stop-2"})
+
+    def test_heatmap_empty_without_mapped_incidents(self) -> None:
+        # Covers the max_w fallback when the filtered set has no geometry.
+        points = heatmap_points(self.conn, window="24h", district="TENDERLOIN")
+        self.assertEqual(points, [])
+
+    def test_search_scopes_stats_and_heatmap(self) -> None:
+        # A search must scope every panel the UI shows, not only the feed.
+        s = stats(self.conn, window="30d", q="assault")
+        self.assertEqual(s["total"], 1)
+        self.assertEqual([r["category"] for r in s["by_category"]], ["violence"])
+        self.assertEqual(len(s["hotspots"]), 1)
+        self.assertEqual(s["hotspots"][0]["intersection"], "MARKET ST \\ 6TH ST")
+        points = heatmap_points(self.conn, window="30d", q="assault")
+        self.assertEqual(len(points), 1)
+
+        s2 = stats(self.conn, window="30d", q="market")
+        self.assertEqual(s2["total"], 3)
+        self.assertEqual(heatmap_points(self.conn, window="30d", q="market") != [], True)
+
+        # No query leaves every panel unscoped.
+        self.assertEqual(stats(self.conn, window="30d")["total"], 3)
+
+    def test_status_filter_selects_open_or_closed(self) -> None:
+        # The UI's "Open" switch is backed by this parameter.
+        open_rows = list_incidents(self.conn, window="30d", status="open")
+        self.assertEqual({r["cad_number"] for r in open_rows}, {"stop-1"})
+        closed = list_incidents(self.conn, window="30d", status="closed")
+        self.assertEqual({r["cad_number"] for r in closed}, {"stop-2", "old-1"})
+        # Unknown values are ignored rather than treated as a blanket filter.
+        ignored = list_incidents(self.conn, window="30d", status="banana")
+        self.assertEqual({r["cad_number"] for r in ignored}, {"stop-1", "stop-2", "old-1"})
 
     def test_category_and_district_filters(self) -> None:
         rows = list_incidents(

@@ -9,3 +9,9 @@ venv/
 *.db-shm
 .DS_Store
 .codegraph/
+build/
+dist/
+*.egg-info/
+.coverage
+coverage.xml
+uv.lock

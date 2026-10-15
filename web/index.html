@@ -7,7 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Vendored locally: this is a local-first tool and should work offline. -->
+  <link rel="stylesheet" href="/vendor/leaflet.css" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
@@ -30,6 +31,7 @@
         <button type="button" data-window="24h" class="on">24h</button>
         <button type="button" data-window="7d">7d</button>
         <button type="button" data-window="30d">30d</button>
+        <button type="button" data-window="90d">90d</button>
       </div>
 
       <label class="search">
@@ -50,6 +52,11 @@
         <button type="button" class="switch" id="openOnly" aria-pressed="false">Open</button>
         <button type="button" class="switch on" id="hideRoutine" aria-pressed="true">Skip noise</button>
       </div>
+
+      <label class="field basemap">
+        <span>Map</span>
+        <select id="basemap"></select>
+      </label>
 
       <button type="button" id="refresh">Sync</button>
       <button type="button" id="feedToggle" class="mobile-only">Feed</button>
@@ -75,8 +82,8 @@
     <div class="legend" id="legend"></div>
   </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+  <script src="/vendor/leaflet.js"></script>
+  <script src="/vendor/leaflet-heat.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

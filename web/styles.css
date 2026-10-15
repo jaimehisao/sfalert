@@ -69,18 +69,24 @@ button { cursor: pointer; }
 
 .pills {
   display: flex;
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 3px;
 }
+.pills::-webkit-scrollbar { display: none; }
 .pills button {
   border: 0; background: transparent;
   color: var(--muted);
-  padding: 6px 10px;
+  padding: 6px 8px;
   border-radius: 999px;
   font-size: 12px;
   font-family: "IBM Plex Mono", monospace;
+  white-space: nowrap;
 }
 .pills button.on { background: var(--sodium); color: #1a1204; font-weight: 600; }
 
@@ -96,6 +102,7 @@ button { cursor: pointer; }
 .search input:focus { border-color: var(--sodium); }
 
 .field { display: flex; flex-direction: column; gap: 2px; font-size: 10px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+.field.basemap select { min-width: 132px; }
 .field select {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--line);

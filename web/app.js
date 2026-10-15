@@ -8,6 +8,7 @@ const state = {
   pins: true,
   openOnly: false,
   q: "",
+  basemap: "",
   selected: null,
   incidents: [],
   stats: null,
@@ -15,14 +16,12 @@ const state = {
 
 const map = L.map("map", { zoomControl: false, attributionControl: true })
   .setView([37.7749, -122.4194], 13);
-L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-  attribution: "&copy; OpenStreetMap &copy; CARTO",
-  maxZoom: 19,
-}).addTo(map);
 L.control.zoom({ position: "bottomleft" }).addTo(map);
 
 const pinLayer = L.layerGroup().addTo(map);
 let heatLayer = null;
+let basemapLayer = null;
+let basemaps = [];
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (ch) => (
@@ -35,13 +34,17 @@ function street(name) {
 }
 
 function qs() {
+  const searching = state.q.trim().length > 0;
   const p = new URLSearchParams({
     window: state.window,
     hide_routine: state.hideRoutine ? "1" : "0",
+    // Search covers the whole store, so allow deeper results while typing.
+    limit: searching ? "500" : "250",
   });
   if (state.category) p.set("category", state.category);
   if (state.district) p.set("district", state.district);
   if (state.openOnly) p.set("status", "open");
+  if (searching) p.set("q", state.q.trim());
   return p.toString();
 }
 
@@ -51,6 +54,7 @@ function readUrl() {
   state.category = u.searchParams.get("category") || "";
   state.district = u.searchParams.get("district") || "";
   state.q = u.searchParams.get("q") || "";
+  state.basemap = u.searchParams.get("basemap") || "";
   if (u.searchParams.get("open") === "1") state.openOnly = true;
   if (u.searchParams.get("noise") === "1") state.hideRoutine = false;
 }
@@ -62,6 +66,7 @@ function writeUrl() {
   set("category", state.category);
   set("district", state.district);
   set("q", state.q);
+  set("basemap", state.basemap);
   set("open", state.openOnly ? "1" : "");
   set("noise", state.hideRoutine ? "" : "1");
   history.replaceState(null, "", u);
@@ -89,16 +94,38 @@ function colorFor(cat) {
   return COLORS[cat] || "#64748b";
 }
 
-function visibleIncidents() {
-  const q = state.q.trim().toLowerCase();
-  if (!q) return state.incidents;
-  return state.incidents.filter((it) => {
-    const blob = [
-      it.call_type_final_desc, it.intersection, it.neighborhood,
-      it.district, it.cad_number, it.agency,
-    ].join(" ").toLowerCase();
-    return blob.includes(q);
-  });
+function applyBasemap(id) {
+  state.basemap = id;
+  const sel = document.getElementById("basemap");
+  if (sel) sel.value = id;
+  const def = basemaps.find((b) => b.id === id) || basemaps[0];
+  if (basemapLayer) {
+    map.removeLayer(basemapLayer);
+    basemapLayer = null;
+  }
+  // "none" means no external tile requests at all: pins and heat still work.
+  if (!def || !def.url) return;
+  basemapLayer = L.tileLayer(def.url, {
+    attribution: def.attribution,
+    subdomains: def.subdomains || "abc",
+    maxZoom: 19,
+  }).addTo(map);
+}
+
+async function initBasemap() {
+  const meta = await getJSON("/api/meta");
+  basemaps = meta.basemaps || [];
+  const sel = document.getElementById("basemap");
+  sel.innerHTML = basemaps
+    .map((b) => `<option value="${escapeHtml(b.id)}">${escapeHtml(b.label)}</option>`)
+    .join("");
+  sel.onchange = () => {
+    applyBasemap(sel.value);
+    writeUrl();
+  };
+  // The server's default (SFALERT_BASEMAP) applies unless the URL says otherwise.
+  const wanted = state.basemap || meta.basemap?.id || "";
+  applyBasemap(basemaps.some((b) => b.id === wanted) ? wanted : (meta.basemap?.id || basemaps[0]?.id));
 }
 
 function setPressed(id, on) {
@@ -299,7 +326,10 @@ function focusCad(cad) {
 }
 
 function paintLocal() {
-  const items = visibleIncidents();
+  // Filtering happens server-side (see qs(): q=...), so the fetched rows
+  // are exactly the visible set - even across the whole store, not just
+  // the 250 newest.
+  const items = state.incidents;
   renderFeed(items);
   renderPins(items);
   if (state.selected) {
@@ -318,7 +348,7 @@ async function reload() {
   setPressed("hideRoutine", state.hideRoutine);
   try {
     const [incidents, heat, stats] = await Promise.all([
-      getJSON(`/api/incidents?${qs()}&limit=250`),
+      getJSON(`/api/incidents?${qs()}`),
       getJSON(`/api/heatmap?${qs()}`),
       getJSON(`/api/stats?${qs()}`),
     ]);
@@ -351,7 +381,7 @@ document.getElementById("heatmap").onclick = () => {
 document.getElementById("pins").onclick = () => {
   state.pins = !state.pins;
   setPressed("pins", state.pins);
-  renderPins(visibleIncidents());
+  renderPins(state.incidents);
 };
 document.getElementById("openOnly").onclick = () => {
   state.openOnly = !state.openOnly;
@@ -361,10 +391,13 @@ document.getElementById("hideRoutine").onclick = () => {
   state.hideRoutine = !state.hideRoutine;
   reload();
 };
+let qTimer = null;
 document.getElementById("q").addEventListener("input", (e) => {
   state.q = e.target.value;
   writeUrl();
-  paintLocal();
+  // Debounce: search runs server-side over the whole store.
+  clearTimeout(qTimer);
+  qTimer = setTimeout(reload, 200);
 });
 document.getElementById("refresh").onclick = async () => {
   document.getElementById("statusLine").textContent = "syncing CAD…";
@@ -387,5 +420,12 @@ document.addEventListener("keydown", (e) => {
 
 readUrl();
 document.getElementById("q").value = state.q;
+initBasemap();
 reload();
-setInterval(reload, 60000);
+setInterval(() => {
+  // Three API requests per tick is wasteful on a backgrounded tab.
+  if (!document.hidden) reload();
+}, 60000);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) reload();
+});

@@ -16,6 +16,7 @@ WINDOWS = {
     "24h": 1,
     "7d": 7,
     "30d": 30,
+    "90d": 90,
 }
 
 
@@ -48,6 +49,34 @@ def _filters(
     return " AND ".join(clauses), args
 
 
+_LIKE_COLUMNS = (
+    "call_type_final_desc",
+    "intersection",
+    "neighborhood",
+    "district",
+    "cad_number",
+    "agency",
+)
+
+
+def _escape_like(value: str) -> str:
+    """Escape LIKE wildcards so user input is matched literally."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _search_clause(q: str | None) -> tuple[str, list[Any]]:
+    """Build the search predicate shared by feed, heatmap, and stats.
+
+    Returns a fragment to append to a WHERE clause (already ANDed) and its
+    bind arguments, or empty pieces when q is unset.
+    """
+    if not q:
+        return "", []
+    like = f"%{_escape_like(q)}%"
+    clauses = [f"{col} LIKE ? ESCAPE '\\'" for col in _LIKE_COLUMNS]
+    return " AND (" + " OR ".join(clauses) + ")", [like] * len(_LIKE_COLUMNS)
+
+
 def list_incidents(
     conn: sqlite3.Connection,
     window: str = "24h",
@@ -56,19 +85,21 @@ def list_incidents(
     hide_routine: bool = True,
     status: str | None = None,
     limit: int = 200,
+    q: str | None = None,
 ) -> list[dict[str, Any]]:
     where, args = _filters(window, category, district, hide_routine, status)
+    search_where, search_args = _search_clause(q)
     sql = f"""
         SELECT cad_number, received_datetime, dispatch_datetime, onscene_datetime,
                close_datetime, call_type_final_desc, priority, agency, intersection,
                lat, lon, neighborhood, district, category, routine, severity, status,
                sensitive, disposition
         FROM incidents
-        WHERE {where}
+        WHERE {where}{search_where}
         ORDER BY received_datetime DESC
         LIMIT ?
     """
-    rows = conn.execute(sql, [*args, limit]).fetchall()
+    rows = conn.execute(sql, [*args, *search_args, limit]).fetchall()
     return [dict(row) for row in rows]
 
 
@@ -78,16 +109,18 @@ def heatmap_points(
     category: str | None = None,
     district: str | None = None,
     hide_routine: bool = True,
+    q: str | None = None,
 ) -> list[list[float]]:
     where, args = _filters(window, category, district, hide_routine, None)
+    search_where, search_args = _search_clause(q)
     sql = f"""
         SELECT ROUND(lat, 4) AS lat, ROUND(lon, 4) AS lon,
                COUNT(*) AS n, SUM(severity) AS weight
         FROM incidents
-        WHERE {where} AND lat IS NOT NULL AND lon IS NOT NULL
+        WHERE {where}{search_where} AND lat IS NOT NULL AND lon IS NOT NULL
         GROUP BY ROUND(lat, 4), ROUND(lon, 4)
     """
-    rows = list(conn.execute(sql, args))
+    rows = list(conn.execute(sql, [*args, *search_args]))
     max_w = max((row["weight"] or 0) for row in rows) if rows else 1
     points = []
     for row in rows:
@@ -102,8 +135,14 @@ def stats(
     category: str | None = None,
     district: str | None = None,
     hide_routine: bool = True,
+    q: str | None = None,
 ) -> dict[str, Any]:
     where, args = _filters(window, category, district, hide_routine, None)
+    search_where, search_args = _search_clause(q)
+    # Every aggregate below shares this WHERE, so a search scopes the
+    # counts, chips, hour bars, and hotspots the same way it scopes the feed.
+    where += search_where
+    args = [*args, *search_args]
     total = conn.execute(
         f"SELECT COUNT(*) AS n FROM incidents WHERE {where}", args
     ).fetchone()["n"]

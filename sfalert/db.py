@@ -7,6 +7,8 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 DB_PATH = DATA_DIR / "sfalert.db"
 
+SCHEMA_VERSION = 1
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS incidents (
     cad_number TEXT PRIMARY KEY,
@@ -48,6 +50,16 @@ CREATE INDEX IF NOT EXISTS idx_incidents_routine ON incidents(routine);
 """
 
 
+def _ensure_schema(conn: sqlite3.Connection) -> None:
+    # CREATE INDEX IF NOT EXISTS on every connect is pure overhead for the
+    # common case (existing store). user_version marks a schema that has
+    # already been applied; future schema changes bump SCHEMA_VERSION and
+    # add the new statements here.
+    if conn.execute("PRAGMA user_version").fetchone()[0] < SCHEMA_VERSION:
+        conn.executescript(SCHEMA)
+        conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+
+
 def connect(path: Path | None = None) -> sqlite3.Connection:
     db_path = path or DB_PATH
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -55,8 +67,11 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
+    # The poll thread writes while API handlers read; without a busy_timeout
+    # SQLite raises "database is locked" immediately instead of waiting.
+    conn.execute("PRAGMA busy_timeout=5000")
     conn.execute("PRAGMA foreign_keys=ON")
-    conn.executescript(SCHEMA)
+    _ensure_schema(conn)
     return conn
 
 
