@@ -60,6 +60,25 @@ make test
 `pip install -e ".[dev]"`. GitHub Actions runs the coverage gate on every
 `push` to `main` and pull request.
 
+### UI screenshots
+
+`tools/screenshot.py` renders the map UI headlessly for visual checks —
+useful before/after a UI change, since a state in the UI is also a URL:
+
+```bash
+uv run --with playwright -- python tools/screenshot.py --window 90d --out /tmp/ui.png
+
+# a filtered state, in a phone viewport
+uv run --with playwright -- python tools/screenshot.py \
+    --district MISSION --search stabbing --view mobile --out /tmp/mobile.png
+```
+
+Flags mirror the app's own URL state (`--window`, `--category`,
+`--district`, `--search`, `--open-only`, `--noise`, `--view`). Basemap tiles are
+rewritten to OpenStreetMap so output is deterministic — CARTO answers
+anonymous tile bursts with an “API KEY REQUIRED” watermark — and
+`--keep-tiles` disables the swap.
+
 GitHub Actions runs the same target on `ubuntu-latest` (`push` to `main` and pull requests). Pushes to `main` and `v*` tags also publish a container image to GHCR:
 
 ```bash
