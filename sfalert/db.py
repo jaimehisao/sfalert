@@ -136,6 +136,24 @@ def count_incidents(conn: sqlite3.Connection) -> int:
     return int(row["n"]) if row else 0
 
 
+def prune_incidents(conn: sqlite3.Connection, days: int) -> int:
+    """Delete incidents older than `days` (by received_datetime).
+
+    DELETE triggers keep incidents_fts in step. Returns rows deleted.
+    """
+    if days <= 0:
+        raise ValueError("prune days must be positive")
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    cutoff = (datetime.now(ZoneInfo("America/Los_Angeles")) - timedelta(days=days)).strftime(
+        "%Y-%m-%dT%H:%M:%S"
+    )
+    cur = conn.execute("DELETE FROM incidents WHERE received_datetime < ?", (cutoff,))
+    conn.commit()
+    return cur.rowcount if cur.rowcount is not None else 0
+
+
 def upsert_incidents(conn: sqlite3.Connection, rows: list[dict]) -> int:
     if not rows:
         return 0

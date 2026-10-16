@@ -24,6 +24,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_ingest.add_argument(
         "--days", type=int, default=argparse.SUPPRESS, help="Closed-call backfill window"
     )
+    p_ingest.add_argument(
+        "--prune-days",
+        type=int,
+        default=argparse.SUPPRESS,
+        help="Delete incidents older than N days after ingest",
+    )
     p_ingest.add_argument("--no-realtime", action="store_true")
     p_ingest.add_argument("--no-backfill", action="store_true")
 
@@ -33,6 +39,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_serve.add_argument("--no-poll", action="store_true", default=argparse.SUPPRESS)
 
     parser.add_argument("--days", type=int, default=30)
+    parser.add_argument("--prune-days", type=int, default=None,
+                        help="Retain only the last N days in SQLite")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--no-browser", action="store_true")
@@ -49,6 +57,7 @@ def main(argv: list[str] | None = None) -> None:
                 days=args.days,
                 realtime=not args.no_realtime,
                 backfill=not args.no_backfill,
+                prune_days=args.prune_days,
             )
             return
 
@@ -56,7 +65,7 @@ def main(argv: list[str] | None = None) -> None:
             serve(host=args.host, port=args.port, poll=not args.no_poll)
             return
 
-        ensure_data(days=args.days)
+        ensure_data(days=args.days, prune_days=args.prune_days)
         if not args.no_browser:
             url = f"http://{args.host}:{args.port}"
             try:

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from .db import connect, count_incidents, upsert_incidents
+from .db import connect, count_incidents, prune_incidents, upsert_incidents
 from .fetch import fetch_realtime, iter_closed, normalize
 
 _lock = threading.Lock()
@@ -21,6 +21,7 @@ def ingest(
     backfill: bool = True,
     log: Callable[[str], None] = print,
     db_path: Path | None = None,
+    prune_days: int | None = None,
 ) -> dict[str, int]:
     """Pull CAD into SQLite. Safe to call repeatedly (upserts by cad_number)."""
     with _lock:
@@ -28,6 +29,7 @@ def ingest(
         ingested_at = _now()
         closed_n = 0
         live_n = 0
+        pruned_n = 0
         try:
             if backfill:
                 log(f"Backfilling closed CAD calls for the last {days} day(s)...")
@@ -43,9 +45,18 @@ def ingest(
                 rows = [row for row in rows if row["cad_number"]]
                 live_n = upsert_incidents(conn, rows)
                 log(f"  realtime upserted {live_n:,}")
+            if prune_days is not None:
+                pruned_n = prune_incidents(conn, prune_days)
+                log(f"  pruned {pruned_n:,} incidents older than {prune_days}d")
+                conn.execute("VACUUM")
             total = count_incidents(conn)
             log(f"Done. Local store has {total:,} incidents.")
-            return {"closed": closed_n, "realtime": live_n, "total": total}
+            return {
+                "closed": closed_n,
+                "realtime": live_n,
+                "pruned": pruned_n,
+                "total": total,
+            }
         finally:
             conn.close()
 
@@ -54,6 +65,7 @@ def ensure_data(
     days: int = 30,
     log: Callable[[str], None] = print,
     db_path: Path | None = None,
+    prune_days: int | None = None,
 ) -> dict[str, int]:
     conn = connect(db_path)
     try:
@@ -62,6 +74,16 @@ def ensure_data(
         conn.close()
     if n == 0:
         log("Empty database — running first ingest.")
-        return ingest(days=days, realtime=True, backfill=True, log=log, db_path=db_path)
+        return ingest(
+            days=days,
+            realtime=True,
+            backfill=True,
+            log=log,
+            db_path=db_path,
+            prune_days=prune_days,
+        )
     log(f"Database already has {n:,} incidents — refreshing real-time feed.")
-    return ingest(days=days, realtime=True, backfill=False, log=log, db_path=db_path)
+    return ingest(
+        days=days, realtime=True, backfill=False, log=log, db_path=db_path,
+        prune_days=prune_days,
+    )
