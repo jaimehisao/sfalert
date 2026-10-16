@@ -76,6 +76,46 @@ class SqliteStoreTest(unittest.TestCase):
     def test_connect_sets_schema_version(self) -> None:
         version = self.conn.execute("PRAGMA user_version").fetchone()[0]
         self.assertEqual(version, SCHEMA_VERSION)
+        self.assertEqual(SCHEMA_VERSION, 2)
+
+    def test_composite_and_hotspot_indexes_exist(self) -> None:
+        indexes = {
+            row[0]
+            for row in self.conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='index'"
+            )
+        }
+        self.assertIn("idx_incidents_filter", indexes)
+        self.assertIn("idx_incidents_hotspot", indexes)
+
+    def test_v1_database_migrates_to_v2_indexes(self) -> None:
+        # Simulate a v1 store: drop the v2 indexes, stamp version 1.
+        self.conn.execute("DROP INDEX IF EXISTS idx_incidents_filter")
+        self.conn.execute("DROP INDEX IF EXISTS idx_incidents_hotspot")
+        self.conn.execute("PRAGMA user_version = 1")
+        self.conn.commit()
+        self.conn.close()
+        migrated = connect(self.path)
+        try:
+            self.assertEqual(
+                migrated.execute("PRAGMA user_version").fetchone()[0],
+                SCHEMA_VERSION,
+            )
+            names = {
+                row[0]
+                for row in migrated.execute(
+                    "SELECT name FROM sqlite_master WHERE type='index'"
+                )
+            }
+            self.assertIn("idx_incidents_filter", names)
+            self.assertIn("idx_incidents_hotspot", names)
+            # Data survives the migration.
+            upserted = upsert_incidents(migrated, [incident_row()])
+            self.assertEqual(upserted, 1)
+            self.assertEqual(count_incidents(migrated), 1)
+        finally:
+            migrated.close()
+        self.conn = connect(self.path)
 
     def test_connect_sets_busy_timeout(self) -> None:
         timeout = self.conn.execute("PRAGMA busy_timeout").fetchone()[0]

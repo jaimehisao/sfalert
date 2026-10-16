@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 DB_PATH = DATA_DIR / "sfalert.db"
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS incidents (
@@ -47,6 +47,17 @@ CREATE INDEX IF NOT EXISTS idx_incidents_category ON incidents(category);
 CREATE INDEX IF NOT EXISTS idx_incidents_district ON incidents(district);
 CREATE INDEX IF NOT EXISTS idx_incidents_geo ON incidents(lat, lon);
 CREATE INDEX IF NOT EXISTS idx_incidents_routine ON incidents(routine);
+-- Composite for the common feed/heatmap/stats WHERE:
+-- received_datetime >= ? [AND routine=0] [AND status=?] [AND category=?] [AND district=?]
+-- Equality columns come first (usable as a prefix); the received range
+-- is last because SQLite stops using index columns after a range.
+-- Without it the planner picks idx_incidents_routine (low selectivity)
+-- and filters + sorts in temp B-trees (seen via EXPLAIN QUERY PLAN).
+CREATE INDEX IF NOT EXISTS idx_incidents_filter
+    ON incidents(routine, status, category, district, received_datetime);
+-- Hotspot GROUP BY intersection, neighborhood, district.
+CREATE INDEX IF NOT EXISTS idx_incidents_hotspot
+    ON incidents(intersection, neighborhood, district);
 """
 
 
