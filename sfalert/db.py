@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 DB_PATH = DATA_DIR / "sfalert.db"
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS incidents (
@@ -58,7 +58,51 @@ CREATE INDEX IF NOT EXISTS idx_incidents_filter
 -- Hotspot GROUP BY intersection, neighborhood, district.
 CREATE INDEX IF NOT EXISTS idx_incidents_hotspot
     ON incidents(intersection, neighborhood, district);
+-- Trigram FTS for substring search (LIKE '%q%' semantics without a full
+-- scan). Short queries (<3 chars) still use LIKE via query.py fallback.
+CREATE VIRTUAL TABLE IF NOT EXISTS incidents_fts USING fts5(
+    cad_number, call_type_final_desc, intersection, neighborhood,
+    district, agency, tokenize='trigram'
+);
+CREATE TRIGGER IF NOT EXISTS incidents_fts_ai AFTER INSERT ON incidents BEGIN
+    INSERT INTO incidents_fts(
+        cad_number, call_type_final_desc, intersection,
+        neighborhood, district, agency
+    ) VALUES (
+        NEW.cad_number, NEW.call_type_final_desc, NEW.intersection,
+        NEW.neighborhood, NEW.district, NEW.agency
+    );
+END;
+CREATE TRIGGER IF NOT EXISTS incidents_fts_ad AFTER DELETE ON incidents BEGIN
+    DELETE FROM incidents_fts WHERE cad_number = OLD.cad_number;
+END;
+CREATE TRIGGER IF NOT EXISTS incidents_fts_au AFTER UPDATE ON incidents BEGIN
+    DELETE FROM incidents_fts WHERE cad_number = OLD.cad_number;
+    INSERT INTO incidents_fts(
+        cad_number, call_type_final_desc, intersection,
+        neighborhood, district, agency
+    ) VALUES (
+        NEW.cad_number, NEW.call_type_final_desc, NEW.intersection,
+        NEW.neighborhood, NEW.district, NEW.agency
+    );
+END;
 """
+
+
+def _backfill_fts(conn: sqlite3.Connection) -> None:
+    """Populate FTS for rows that predate the v3 triggers (upgrades)."""
+    conn.execute(
+        """
+        INSERT INTO incidents_fts(
+            cad_number, call_type_final_desc, intersection,
+            neighborhood, district, agency
+        )
+        SELECT cad_number, call_type_final_desc, intersection,
+               neighborhood, district, agency
+        FROM incidents
+        WHERE cad_number NOT IN (SELECT cad_number FROM incidents_fts)
+        """
+    )
 
 
 def _ensure_schema(conn: sqlite3.Connection) -> None:
@@ -68,6 +112,7 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     # add the new statements here.
     if conn.execute("PRAGMA user_version").fetchone()[0] < SCHEMA_VERSION:
         conn.executescript(SCHEMA)
+        _backfill_fts(conn)
         conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
 
