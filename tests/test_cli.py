@@ -48,7 +48,26 @@ class CliTest(unittest.TestCase):
     def test_main_ingest_returns_cleanly(self) -> None:
         with patch("sfalert.__main__.ingest") as ingest_mock:
             main(["ingest", "--no-realtime", "--no-backfill"])
-        ingest_mock.assert_called_once_with(days=30, realtime=False, backfill=False)
+        ingest_mock.assert_called_once_with(
+            days=30, realtime=False, backfill=False, prune_days=None
+        )
+
+    def test_prune_days_flag_orders(self) -> None:
+        self.assertEqual(
+            self.parser.parse_args(["--prune-days", "90", "ingest"]).prune_days, 90
+        )
+        self.assertEqual(
+            self.parser.parse_args(["ingest", "--prune-days", "90"]).prune_days, 90
+        )
+        self.assertIsNone(self.parser.parse_args(["ingest"]).prune_days)
+        self.assertIsNone(self.parser.parse_args([]).prune_days)
+
+    def test_main_ingest_passes_prune_days(self) -> None:
+        with patch("sfalert.__main__.ingest") as ingest_mock:
+            main(["ingest", "--prune-days", "90"])
+        ingest_mock.assert_called_once_with(
+            days=30, realtime=True, backfill=True, prune_days=90
+        )
 
     def test_serve_subcommand_invokes_serve(self) -> None:
         with patch("sfalert.__main__.serve") as serve_mock:

@@ -3,10 +3,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from sfalert.db import connect, count_incidents
+from sfalert.db import connect, count_incidents, prune_incidents
 from sfalert.ingest import ensure_data, ingest
 
-from tests.helpers import cad_payload
+from tests.helpers import cad_payload, incident_row, pacific_iso
 
 
 class IngestTest(unittest.TestCase):
@@ -89,4 +89,70 @@ class IngestTest(unittest.TestCase):
     def test_skips_rows_without_cad_number(self, _closed, _rt) -> None:
         result = ingest(backfill=False, realtime=True, log=self._log, db_path=self.path)
         self.assertEqual(result["realtime"], 0)
+        self.assertEqual(result["total"], 0)
+
+    def test_prune_deletes_old_and_keeps_fts_in_step(self) -> None:
+        from datetime import datetime, timedelta
+        from zoneinfo import ZoneInfo
+
+        now = datetime.now(ZoneInfo("America/Los_Angeles"))
+        old_dt = (now - timedelta(days=100)).strftime("%Y-%m-%dT%H:%M:%S")
+        new_dt = pacific_iso(hours=1)
+        conn = connect(self.path)
+        try:
+            from sfalert.db import upsert_incidents
+
+            upsert_incidents(
+                conn,
+                [
+                    incident_row(
+                        cad_number="old-9", received_datetime=old_dt,
+                        call_type_final_desc="OLD CALL MARKERXYZ",
+                    ),
+                    incident_row(cad_number="new-9", received_datetime=new_dt),
+                ],
+            )
+            self.assertEqual(count_incidents(conn), 2)
+            deleted = prune_incidents(conn, 90)
+            self.assertEqual(deleted, 1)
+            remaining = {
+                row[0] for row in conn.execute("SELECT cad_number FROM incidents")
+            }
+            self.assertEqual(remaining, {"new-9"})
+            fts = {
+                row[0]
+                for row in conn.execute("SELECT cad_number FROM incidents_fts")
+            }
+            self.assertEqual(fts, {"new-9"})
+        finally:
+            conn.close()
+
+    def test_prune_rejects_non_positive_days(self) -> None:
+        conn = connect(self.path)
+        try:
+            with self.assertRaises(ValueError):
+                prune_incidents(conn, 0)
+        finally:
+            conn.close()
+
+    @patch("sfalert.ingest.fetch_realtime", return_value=[])
+    @patch("sfalert.ingest.iter_closed", return_value=[])
+    def test_ingest_with_prune_days_reports_pruned(self, _closed, _rt) -> None:
+        conn = connect(self.path)
+        try:
+            from datetime import datetime, timedelta
+            from zoneinfo import ZoneInfo
+
+            from sfalert.db import upsert_incidents
+
+            now = datetime.now(ZoneInfo("America/Los_Angeles"))
+            old_dt = (now - timedelta(days=100)).strftime("%Y-%m-%dT%H:%M:%S")
+            upsert_incidents(conn, [incident_row(received_datetime=old_dt)])
+        finally:
+            conn.close()
+        result = ingest(
+            backfill=False, realtime=False, log=self._log,
+            db_path=self.path, prune_days=90,
+        )
+        self.assertEqual(result["pruned"], 1)
         self.assertEqual(result["total"], 0)

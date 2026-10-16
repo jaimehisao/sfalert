@@ -196,3 +196,18 @@ class SqliteStoreTest(unittest.TestCase):
     def test_connect_sets_busy_timeout(self) -> None:
         timeout = self.conn.execute("PRAGMA busy_timeout").fetchone()[0]
         self.assertGreaterEqual(timeout, 1000)
+
+    def test_prune_keeps_recent_and_reports_count(self) -> None:
+        from tests.helpers import pacific_iso as _iso
+
+        upsert_incidents(
+            self.conn,
+            [
+                incident_row(cad_number="keep-1", received_datetime=_iso(hours=1)),
+                incident_row(cad_number="drop-1", received_datetime="2020-01-01T00:00:00"),
+            ],
+        )
+        from sfalert.db import prune_incidents
+
+        self.assertEqual(prune_incidents(self.conn, 90), 1)
+        self.assertEqual(count_incidents(self.conn), 1)
