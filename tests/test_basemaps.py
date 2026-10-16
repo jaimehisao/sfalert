@@ -29,7 +29,9 @@ class BasemapRegistryTest(unittest.TestCase):
         self.assertEqual({row["id"] for row in rows}, set(BASEMAPS))
         for row in rows:
             self.assertEqual(
-                set(row), {"id", "label", "url", "subdomains", "attribution"}, row["id"]
+                set(row),
+                {"id", "label", "url", "subdomains", "attribution", "max_native_zoom"},
+                row["id"],
             )
 
     def test_provider_returns_full_config(self) -> None:
@@ -41,6 +43,24 @@ class BasemapRegistryTest(unittest.TestCase):
 
     def test_none_provider_has_no_url(self) -> None:
         self.assertIsNone(provider("none")["url"])
+
+    def test_raster_providers_declare_a_sane_native_zoom(self) -> None:
+        # Tile ceilings verified against live endpoints: OSM's rasters end
+        # at z19, Esri's SF cache at z16. Past the ceiling a provider serves
+        # placeholder tiles ("Map data not yet available") or nothing, so the
+        # UI must know where to stop asking and start upscaling.
+        ceilings = {"carto-dark": 20, "esri-dark": 16, "osm": 19}
+        for key, expected in ceilings.items():
+            self.assertEqual(BASEMAPS[key]["max_native_zoom"], expected, key)
+        for key, meta in BASEMAPS.items():
+            if meta.get("url") is None:
+                continue
+            native = meta["max_native_zoom"]
+            self.assertIsInstance(native, int, key)
+            self.assertTrue(1 <= native <= 20, key)
+
+    def test_provider_exposes_native_zoom(self) -> None:
+        self.assertEqual(provider("esri-dark")["max_native_zoom"], 16)
 
 
 class ResolveTest(unittest.TestCase):

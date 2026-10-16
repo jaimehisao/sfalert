@@ -21,6 +21,10 @@ BASEMAPS: dict[str, dict[str, object]] = {
         "label": "Dark · CARTO",
         "url": "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
         "subdomains": "abcd",
+        # Nominal ceiling per CARTO's docs; unverified here because CARTO
+        # answers this environment with its "API KEY REQUIRED" watermark tile
+        # at every zoom level.
+        "max_native_zoom": 20,
         "attribution": (
             '&copy; <a href="https://www.openstreetmap.org/copyright">'
             "OpenStreetMap</a> &copy; "
@@ -34,12 +38,18 @@ BASEMAPS: dict[str, dict[str, object]] = {
             "/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
         ),
         "subdomains": "",
+        # Verified against live tiles: SF has real coverage to z16 and
+        # "Map data not yet available" placeholders beyond it, so the UI
+        # upscales from z16 instead of drawing those placeholder tiles.
+        "max_native_zoom": 16,
         "attribution": 'Tiles &copy; <a href="https://www.esri.com/">Esri</a>',
     },
     "osm": {
         "label": "Standard · OpenStreetMap",
         "url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
         "subdomains": "",
+        # Verified: real rasters to z19, nothing at z20.
+        "max_native_zoom": 19,
         "attribution": (
             '&copy; <a href="https://www.openstreetmap.org/copyright">'
             "OpenStreetMap</a> contributors"
@@ -49,6 +59,7 @@ BASEMAPS: dict[str, dict[str, object]] = {
         "label": "No basemap · offline",
         "url": None,
         "subdomains": "",
+        "max_native_zoom": None,
         "attribution": "",
     },
 }

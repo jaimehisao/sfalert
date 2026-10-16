@@ -108,6 +108,10 @@ function applyBasemap(id) {
   basemapLayer = L.tileLayer(def.url, {
     attribution: def.attribution,
     subdomains: def.subdomains || "abc",
+    // Providers stop serving real tiles past their own ceiling (Esri's SF
+    // cache ends at z16); upscale the last real zoom instead of requesting
+    // tiles that come back as placeholder images.
+    maxNativeZoom: def.max_native_zoom || 19,
     maxZoom: 19,
   }).addTo(map);
 }

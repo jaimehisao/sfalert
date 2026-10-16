@@ -121,7 +121,10 @@ class ApiServerTest(unittest.TestCase):
         ids = [row["id"] for row in meta["basemaps"]]
         self.assertIn("none", ids)
         self.assertIn("esri-dark", ids)
-        self.assertEqual(set(meta["basemap"]), {"id", "label", "url", "subdomains", "attribution"})
+        self.assertEqual(
+            set(meta["basemap"]),
+            {"id", "label", "url", "subdomains", "attribution", "max_native_zoom"},
+        )
 
     @patch.dict("os.environ", {"SFALERT_BASEMAP": "none"})
     def test_meta_honors_env_basemap(self) -> None:
