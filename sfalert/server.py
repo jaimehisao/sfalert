@@ -12,7 +12,7 @@ from . import ingest as ingest_mod
 from .basemaps import basemap_meta, provider, resolve
 from .categories import category_meta
 from .db import ROOT, connect
-from .query import WINDOWS, heatmap_points, list_incidents, stats
+from .query import WINDOWS, bundle, heatmap_points, list_incidents, stats
 
 WEB_DIR = ROOT / "web"
 POLL_SECONDS = 120
@@ -125,6 +125,22 @@ class Handler(SimpleHTTPRequestHandler):
                         category=category,
                         district=district,
                         hide_routine=hide_routine,
+                        q=q,
+                    )
+                )
+                return
+            if path == "/api/bundle":
+                # One round trip for the UI's reload(): feed + heat + stats
+                # share one SQLite connection and one param parse.
+                self._json(
+                    bundle(
+                        conn,
+                        window=window,
+                        category=category,
+                        district=district,
+                        hide_routine=hide_routine,
+                        status=status,
+                        limit=limit,
                         q=q,
                     )
                 )

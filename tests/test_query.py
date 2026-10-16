@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 from sfalert.db import connect, upsert_incidents
-from sfalert.query import heatmap_points, list_incidents, stats, window_start
+from sfalert.query import bundle, heatmap_points, list_incidents, stats, window_start
 
 from tests.helpers import incident_row, pacific_iso
 
@@ -176,3 +176,17 @@ class QueryTest(unittest.TestCase):
         )
         self.assertTrue(southern)
         self.assertTrue(all(row["district"] == "SOUTHERN" for row in southern))
+
+    def test_bundle_returns_all_three_scopes(self) -> None:
+        data = bundle(self.conn, window="24h", hide_routine=True)
+        self.assertEqual(
+            {r["cad_number"] for r in data["incidents"]}, {"stop-1", "stop-2"}
+        )
+        self.assertEqual(len(data["heat"]), 1)
+        self.assertEqual(data["stats"]["total"], 2)
+        # Status scopes the feed only, like the legacy endpoints.
+        open_only = bundle(self.conn, window="30d", status="open")
+        self.assertEqual(
+            {r["cad_number"] for r in open_only["incidents"]}, {"stop-1"}
+        )
+        self.assertEqual(open_only["stats"]["total"], 3)

@@ -371,11 +371,11 @@ async function reload() {
   setPressed("openOnly", state.openOnly);
   setPressed("hideRoutine", state.hideRoutine);
   try {
-    const [incidents, heat, stats] = await Promise.all([
-      getJSON(`/api/incidents?${qs()}`),
-      getJSON(`/api/heatmap?${qs()}`),
-      getJSON(`/api/stats?${qs()}`),
-    ]);
+    // Single round trip (was 3 parallel: incidents+heatmap+stats).
+    const data = await getJSON(`/api/bundle?${qs()}`);
+    const incidents = data.incidents || [];
+    const heat = { points: data.heat || [] };
+    const stats = data.stats;
     state.incidents = incidents;
     state.stats = stats;
     renderCats(stats);
@@ -447,7 +447,7 @@ document.getElementById("q").value = state.q;
 initBasemap();
 reload();
 setInterval(() => {
-  // Three API requests per tick is wasteful on a backgrounded tab.
+  // Skip the bundle fetch while backgrounded; refresh on return.
   if (!document.hidden) reload();
 }, 60000);
 document.addEventListener("visibilitychange", () => {
