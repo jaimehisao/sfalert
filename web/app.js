@@ -1,4 +1,5 @@
 const COLORS = {};
+const FEED_PAGE = 100;
 const state = {
   window: "24h",
   category: "",
@@ -11,6 +12,8 @@ const state = {
   basemap: "",
   selected: null,
   incidents: [],
+  heat: [],
+  feedShown: FEED_PAGE,
   stats: null,
 };
 
@@ -237,14 +240,18 @@ function renderFeed(items, total) {
   const count = total ?? state.stats?.total ?? items.length;
   // The feed is capped (250 newest, 500 while searching) so "N shown"
   // alone hides how much is hidden. Show "N of M" when truncated.
+  // Rendering is paged (FEED_PAGE at a time) so a 500-row search does
+  // not build 500 cards at once on a phone.
+  const shown = items.slice(0, state.feedShown);
   document.getElementById("feedCount").textContent =
-    count > items.length ? `${items.length} of ${count} shown` : `${items.length} shown`;
+    count > shown.length ? `${shown.length} of ${count} shown` : `${shown.length} shown`;
   if (!items.length) {
     document.getElementById("feed").innerHTML = `
       <div class="empty"><div class="rings"></div>No matching calls in this window.</div>`;
     return;
   }
-  document.getElementById("feed").innerHTML = items.map((it) => `
+  const more = items.length - shown.length;
+  document.getElementById("feed").innerHTML = shown.map((it) => `
     <article class="card" data-cad="${escapeHtml(it.cad_number)}" style="--cat:${colorFor(it.category)}">
       <div class="kicker">
         <span>${escapeHtml(it.district || "SF")} · ${escapeHtml(relTime(it.received_datetime))}</span>
@@ -254,10 +261,19 @@ function renderFeed(items, total) {
       <p>${escapeHtml(street(it.intersection))}
          ${it.neighborhood ? " · " + escapeHtml(it.neighborhood) : ""}</p>
     </article>
-  `).join("");
+  `).join("") + (more > 0
+    ? `<button type="button" class="more" id="feedMore">Show more · ${more} remaining</button>`
+    : "");
   document.querySelectorAll(".card").forEach((el) => {
     el.onclick = () => focusCad(el.dataset.cad);
   });
+  const moreBtn = document.getElementById("feedMore");
+  if (moreBtn) {
+    moreBtn.onclick = () => {
+      state.feedShown += FEED_PAGE;
+      renderFeed(state.incidents);
+    };
+  }
 }
 
 function renderDetail(it) {
@@ -362,6 +378,10 @@ function paintLocal() {
   }
 }
 
+function resetFeedPaging() {
+  state.feedShown = FEED_PAGE;
+}
+
 async function reload() {
   document.getElementById("pulse").classList.remove("idle");
   writeUrl();
@@ -377,10 +397,12 @@ async function reload() {
     const heat = { points: data.heat || [] };
     const stats = data.stats;
     state.incidents = incidents;
+    state.heat = heat.points || [];
     state.stats = stats;
+    resetFeedPaging();
     renderCats(stats);
     renderStats(stats);
-    renderHeat(heat.points || []);
+    renderHeat(state.heat);
     paintLocal();
   } catch (err) {
     document.getElementById("statusLine").textContent = `error: ${err.message}`;
@@ -399,8 +421,10 @@ document.getElementById("district").onchange = (e) => {
   reload();
 };
 document.getElementById("heatmap").onclick = () => {
+  // Local-only toggle: reuse the cached heat points, no refetch.
   state.heatmap = !state.heatmap;
-  reload();
+  setPressed("heatmap", state.heatmap);
+  renderHeat(state.heat || []);
 };
 document.getElementById("pins").onclick = () => {
   state.pins = !state.pins;

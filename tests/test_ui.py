@@ -88,3 +88,14 @@ class WebUiTest(unittest.TestCase):
         self.assertIn('/api/bundle?', self.js)
         self.assertNotIn('/api/incidents?', self.js)
         self.assertNotIn('/api/heatmap?', self.js)
+
+    def test_heat_toggle_is_local_without_refetch(self) -> None:
+        # Heat toggle reuses cached points instead of a full reload().
+        self.assertIn('state.heat', self.js)
+        self.assertIn('renderHeat(state.heat', self.js)
+
+    def test_feed_is_paged_with_show_more(self) -> None:
+        self.assertIn('FEED_PAGE', self.js)
+        self.assertIn('feedMore', self.js)
+        self.assertIn('Show more', self.js)
+        self.assertIn('.more', self.css)

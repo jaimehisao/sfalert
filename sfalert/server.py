@@ -41,6 +41,11 @@ class Handler(SimpleHTTPRequestHandler):
         if parsed.path.startswith("/api/"):
             self._api(parsed.path, parse_qs(parsed.query))
             return
+        if parsed.path.startswith("/vendor/"):
+            # Vendored Leaflet rarely changes; allow a year of edge caching
+            # while index.html/app.js/styles.css stay uncached via 304s.
+            self._send_static(parsed.path, "public, max-age=31536000, immutable")
+            return
         super().do_GET()
 
     def do_POST(self) -> None:
@@ -179,6 +184,33 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _send_static(self, url_path: str, cache_control: str) -> None:
+        # Safe static serve for /vendor/* without directory traversal.
+        rel = url_path[len("/vendor/"):].split("?", 1)[0].split("#", 1)[0]
+        if not rel or "/" in rel or "\\" in rel or rel.startswith("."):
+            self._json({"error": "not found"}, 404)
+            return
+        path = WEB_DIR / "vendor" / rel
+        if not path.is_file():
+            self._json({"error": "not found"}, 404)
+            return
+        ctype = "text/css; charset=utf-8" if path.suffix == ".css" else (
+            "text/javascript; charset=utf-8" if path.suffix == ".js" else
+            "application/octet-stream"
+        )
+        try:
+            data = path.read_bytes()
+        except OSError as exc:
+            print(f"static {url_path} failed: {exc}")
+            self._json({"error": "internal server error"}, 500)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", cache_control)
         self.end_headers()
         self.wfile.write(data)
 
