@@ -129,6 +129,52 @@ def heatmap_points(
     return points
 
 
+def bundle(
+    conn: sqlite3.Connection,
+    window: str = "24h",
+    category: str | None = None,
+    district: str | None = None,
+    hide_routine: bool = True,
+    status: str | None = None,
+    limit: int = 200,
+    q: str | None = None,
+) -> dict[str, Any]:
+    """Feed + heatmap + stats in one connection.
+
+    The UI previously issued 3 parallel requests per poll (3 connects,
+    3 round trips). Status only scopes the feed; heat and stats stay
+    window-wide so pins/heat/stats agree with the legacy endpoints.
+    """
+    return {
+        "incidents": list_incidents(
+            conn,
+            window=window,
+            category=category,
+            district=district,
+            hide_routine=hide_routine,
+            status=status,
+            limit=limit,
+            q=q,
+        ),
+        "heat": heatmap_points(
+            conn,
+            window=window,
+            category=category,
+            district=district,
+            hide_routine=hide_routine,
+            q=q,
+        ),
+        "stats": stats(
+            conn,
+            window=window,
+            category=category,
+            district=district,
+            hide_routine=hide_routine,
+            q=q,
+        ),
+    }
+
+
 def stats(
     conn: sqlite3.Connection,
     window: str = "24h",

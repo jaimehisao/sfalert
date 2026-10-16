@@ -93,6 +93,37 @@ class ApiServerTest(unittest.TestCase):
         _, _, body = self._get("/api/stats?window=24h&q=nothingmatches")
         self.assertEqual(json.loads(body)["total"], 0)
 
+    def test_bundle_matches_individual_endpoints(self) -> None:
+        _, _, bundle_body = self._get("/api/bundle?window=24h")
+        data = json.loads(bundle_body)
+        self.assertEqual({r["cad_number"] for r in data["incidents"]}, {"api-1"})
+        self.assertTrue(data["heat"])
+        self.assertGreaterEqual(data["stats"]["total"], 1)
+        # Parity with the legacy endpoints for the same params.
+        _, _, inc_body = self._get("/api/incidents?window=24h")
+        _, _, heat_body = self._get("/api/heatmap?window=24h")
+        _, _, stats_body = self._get("/api/stats?window=24h")
+        self.assertEqual(data["incidents"], json.loads(inc_body))
+        self.assertEqual(data["heat"], json.loads(heat_body)["points"])
+        self.assertEqual(data["stats"], json.loads(stats_body))
+
+    def test_bundle_scopes_search_and_status(self) -> None:
+        _, _, body = self._get("/api/bundle?window=24h&q=traffic")
+        data = json.loads(body)
+        self.assertEqual(data["stats"]["total"], 1)
+        self.assertEqual(len(data["heat"]), 1)
+        _, _, body = self._get("/api/bundle?window=24h&q=nothingmatches")
+        self.assertEqual(json.loads(body)["stats"]["total"], 0)
+        self.assertEqual(json.loads(body)["incidents"], [])
+
+    def test_bundle_validates_window_and_limit(self) -> None:
+        with self.assertRaises(HTTPError) as ctx:
+            urlopen(self.base + "/api/bundle?window=5min", timeout=5)
+        self.assertEqual(ctx.exception.code, 400)
+        with self.assertRaises(HTTPError) as ctx:
+            urlopen(self.base + "/api/bundle?limit=abc", timeout=5)
+        self.assertEqual(ctx.exception.code, 400)
+
     def test_incidents_hide_routine_by_default(self) -> None:
         _, _, body = self._get("/api/incidents?window=24h")
         rows = json.loads(body)

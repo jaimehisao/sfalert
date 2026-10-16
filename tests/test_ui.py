@@ -83,3 +83,8 @@ class WebUiTest(unittest.TestCase):
 
     def test_keyboard_focus_is_visible(self) -> None:
         self.assertIn(':focus-visible', self.css)
+
+    def test_reload_uses_single_bundle_request(self) -> None:
+        self.assertIn('/api/bundle?', self.js)
+        self.assertNotIn('/api/incidents?', self.js)
+        self.assertNotIn('/api/heatmap?', self.js)
