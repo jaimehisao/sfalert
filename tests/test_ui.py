@@ -58,3 +58,28 @@ class WebUiTest(unittest.TestCase):
         self.assertIn("document.hidden", self.js)
         self.assertIn("visibilitychange", self.js)
         self.assertNotIn("citizen", self.js.lower())
+
+    def test_window_tabs_expose_selection_state(self) -> None:
+        self.assertIn('role="tablist"', self.html)
+        self.assertIn('role="tab"', self.html)
+        self.assertIn('aria-selected', self.html)
+        self.assertIn('aria-selected', self.js)
+
+    def test_hour_bars_have_accessible_names(self) -> None:
+        self.assertIn('aria-label', self.js)
+        # Title and accessible name share the same "HH:00 · N calls" text.
+        self.assertIn('00 · ${n} calls', self.js)
+
+    def test_category_chips_expose_pressed_state(self) -> None:
+        self.assertIn('aria-pressed', self.js)
+
+    def test_feed_count_distinguishes_truncation(self) -> None:
+        self.assertIn('of ${count} shown', self.js)
+
+    def test_district_select_avoids_rebuild_churn(self) -> None:
+        # Rebuilding the select every poll drops focus / closes the menu.
+        self.assertIn('JSON.stringify(existing)', self.js)
+        self.assertIn('document.activeElement === dist', self.js)
+
+    def test_keyboard_focus_is_visible(self) -> None:
+        self.assertIn(':focus-visible', self.css)

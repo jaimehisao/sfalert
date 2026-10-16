@@ -140,7 +140,9 @@ function setPressed(id, on) {
 
 function renderWindows() {
   document.querySelectorAll("#windows [data-window]").forEach((btn) => {
-    btn.classList.toggle("on", btn.dataset.window === state.window);
+    const on = btn.dataset.window === state.window;
+    btn.classList.toggle("on", on);
+    btn.setAttribute("aria-selected", on ? "true" : "false");
   });
 }
 
@@ -152,16 +154,19 @@ function renderCats(stats) {
   host.innerHTML = "";
   const all = document.createElement("button");
   all.className = `chip ${state.category ? "" : "on"}`;
+  all.setAttribute("aria-pressed", state.category ? "false" : "true");
   all.textContent = `All · ${stats.total}`;
   all.onclick = () => { state.category = ""; reload(); };
   host.appendChild(all);
   for (const c of cats) {
     const n = counts[c.id] || 0;
     if (!n && c.id === "other") continue;
+    const on = state.category === c.id;
     const btn = document.createElement("button");
-    btn.className = `chip ${state.category === c.id ? "on" : ""}`;
+    btn.className = `chip ${on ? "on" : ""}`;
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
     btn.style.setProperty("--chip", c.color);
-    btn.innerHTML = `<span class="dot"></span>${escapeHtml(c.label)} · ${n}`;
+    btn.innerHTML = `<span class="dot" aria-hidden="true"></span>${escapeHtml(c.label)} · ${n}`;
     btn.onclick = () => {
       state.category = state.category === c.id ? "" : c.id;
       reload();
@@ -181,7 +186,8 @@ function renderStats(s) {
   document.getElementById("hours").innerHTML = Array.from({ length: 24 }, (_, hour) => {
     const n = byHour.get(hour) || 0;
     const pct = Math.max(8, Math.round((n / maxHour) * 100));
-    return `<button type="button" style="--h:${pct}%" title="${String(hour).padStart(2, "0")}:00 · ${n}"></button>`;
+    const label = `${String(hour).padStart(2, "0")}:00 · ${n} calls`;
+    return `<button type="button" style="--h:${pct}%" title="${label}" aria-label="${label}"></button>`;
   }).join("");
 
   document.getElementById("hotspots").innerHTML = `
@@ -204,10 +210,20 @@ function renderStats(s) {
 
   const dist = document.getElementById("district");
   const current = state.district;
-  dist.innerHTML = `<option value="">All districts</option>` +
-    (s.districts || []).map((d) =>
-      `<option ${d === current ? "selected" : ""}>${escapeHtml(d)}</option>`
-    ).join("");
+  const wanted = ["", ...((s.districts || []).map(String))];
+  const existing = Array.from(dist.options || []).map((o) => o.value);
+  // Rebuilding the <select> on every poll closes an open dropdown and
+  // drops focus. Only touch the DOM when the district list changed.
+  if (JSON.stringify(existing) !== JSON.stringify(wanted)) {
+    const focused = document.activeElement === dist;
+    dist.innerHTML = `<option value="">All districts</option>` +
+      (s.districts || []).map((d) =>
+        `<option ${d === current ? "selected" : ""}>${escapeHtml(d)}</option>`
+      ).join("");
+    if (focused) dist.focus();
+  } else if (dist.value !== current) {
+    dist.value = current;
+  }
 
   const latest = s.latest_incident ? relTime(s.latest_incident) : "n/a";
   document.getElementById("statusLine").textContent =
@@ -217,8 +233,12 @@ function renderStats(s) {
     `<b>Heat includes traffic stops.</b> Passing calls stay off unless you turn off Skip noise.`;
 }
 
-function renderFeed(items) {
-  document.getElementById("feedCount").textContent = `${items.length} shown`;
+function renderFeed(items, total) {
+  const count = total ?? state.stats?.total ?? items.length;
+  // The feed is capped (250 newest, 500 while searching) so "N shown"
+  // alone hides how much is hidden. Show "N of M" when truncated.
+  document.getElementById("feedCount").textContent =
+    count > items.length ? `${items.length} of ${count} shown` : `${items.length} shown`;
   if (!items.length) {
     document.getElementById("feed").innerHTML = `
       <div class="empty"><div class="rings"></div>No matching calls in this window.</div>`;
