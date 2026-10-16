@@ -53,6 +53,10 @@ class ApiServerTest(unittest.TestCase):
             body = resp.read()
             return resp.status, resp.headers.get("Content-Type"), body
 
+    def _get_full(self, path: str):
+        with urlopen(self.base + path, timeout=5) as resp:
+            return resp.status, dict(resp.headers), resp.read()
+
     def test_serves_map_page_and_assets(self) -> None:
         status, ctype, body = self._get("/")
         self.assertEqual(status, 200)
@@ -71,6 +75,20 @@ class ApiServerTest(unittest.TestCase):
             status, _, body = self._get(f"/vendor/{asset}")
             self.assertEqual(status, 200, asset)
             self.assertGreater(len(body), 1000, asset)
+
+    def test_vendor_assets_are_immutable_cached(self) -> None:
+        status, headers, _ = self._get_full("/vendor/leaflet.js")
+        self.assertEqual(status, 200)
+        self.assertIn("immutable", headers.get("Cache-Control", ""))
+        self.assertIn("max-age=31536000", headers.get("Cache-Control", ""))
+
+    def test_vendor_traversal_is_404(self) -> None:
+        from urllib.error import HTTPError
+
+        for bad in ("/vendor/../server.py", "/vendor/", "/vendor/.hidden"):
+            with self.assertRaises(HTTPError) as ctx:
+                urlopen(self.base + bad, timeout=5)
+            self.assertEqual(ctx.exception.code, 404)
 
     def test_incidents_search_param_filters_server_side(self) -> None:
         _, _, body = self._get("/api/incidents?window=24h&q=traffic")
