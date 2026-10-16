@@ -3,7 +3,15 @@ import unittest
 from pathlib import Path
 
 from sfalert.db import connect, upsert_incidents
-from sfalert.query import bundle, heatmap_points, list_incidents, stats, window_start
+from sfalert.query import (
+    _like_clause,
+    _search_clause,
+    bundle,
+    heatmap_points,
+    list_incidents,
+    stats,
+    window_start,
+)
 
 from tests.helpers import incident_row, pacific_iso
 
@@ -190,3 +198,45 @@ class QueryTest(unittest.TestCase):
             {r["cad_number"] for r in open_only["incidents"]}, {"stop-1"}
         )
         self.assertEqual(open_only["stats"]["total"], 3)
+
+    def test_search_uses_fts_for_long_queries(self) -> None:
+        where, args = _search_clause(self.conn, "assault")
+        self.assertIn("MATCH", where)
+        self.assertEqual(args, ['"assault"'])
+        # Parity with LIKE for every existing search test.
+        for q in ("assault", "market", "traffic stop", "southern", "haight"):
+            fts_ids = {
+                r["cad_number"]
+                for r in list_incidents(self.conn, window="30d", q=q)
+            }
+            like_where, like_args = _like_clause(q)
+            like_ids = {
+                row["cad_number"]
+                for row in self.conn.execute(
+                    f"SELECT cad_number FROM incidents WHERE 1=1{like_where}",
+                    like_args,
+                )
+            }
+            # FTS is scoped by window/hide_routine; LIKE baseline is not,
+            # so FTS must be a subset of the LIKE superset here.
+            self.assertTrue(fts_ids <= like_ids, q)
+        self.assertEqual(
+            {r["cad_number"] for r in list_incidents(
+                self.conn, window="30d", q="assault")},
+            {"old-1"},
+        )
+
+    def test_search_falls_back_to_like_for_short_queries(self) -> None:
+        where, args = _search_clause(self.conn, "ab")
+        self.assertNotIn("MATCH", where)
+        self.assertIn("LIKE", where)
+        where, _ = _search_clause(self.conn, "  ")
+        self.assertNotIn("MATCH", where)
+
+    def test_search_without_fts_table_uses_like(self) -> None:
+        self.conn.execute("DROP TABLE IF EXISTS incidents_fts")
+        where, _ = _search_clause(self.conn, "assault")
+        self.assertIn("LIKE", where)
+        # Query still works via LIKE fallback.
+        rows = list_incidents(self.conn, window="30d", q="assault")
+        self.assertEqual([r["cad_number"] for r in rows], ["old-1"])

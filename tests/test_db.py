@@ -76,7 +76,7 @@ class SqliteStoreTest(unittest.TestCase):
     def test_connect_sets_schema_version(self) -> None:
         version = self.conn.execute("PRAGMA user_version").fetchone()[0]
         self.assertEqual(version, SCHEMA_VERSION)
-        self.assertEqual(SCHEMA_VERSION, 2)
+        self.assertEqual(SCHEMA_VERSION, 3)
 
     def test_composite_and_hotspot_indexes_exist(self) -> None:
         indexes = {
@@ -92,6 +92,7 @@ class SqliteStoreTest(unittest.TestCase):
         # Simulate a v1 store: drop the v2 indexes, stamp version 1.
         self.conn.execute("DROP INDEX IF EXISTS idx_incidents_filter")
         self.conn.execute("DROP INDEX IF EXISTS idx_incidents_hotspot")
+        self.conn.execute("DROP TABLE IF EXISTS incidents_fts")
         self.conn.execute("PRAGMA user_version = 1")
         self.conn.commit()
         self.conn.close()
@@ -113,6 +114,81 @@ class SqliteStoreTest(unittest.TestCase):
             upserted = upsert_incidents(migrated, [incident_row()])
             self.assertEqual(upserted, 1)
             self.assertEqual(count_incidents(migrated), 1)
+        finally:
+            migrated.close()
+        self.conn = connect(self.path)
+
+    def test_fts_table_and_triggers_exist(self) -> None:
+        tables = {
+            row[0]
+            for row in self.conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        self.assertIn("incidents_fts", tables)
+        triggers = {
+            row[0]
+            for row in self.conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='trigger'"
+            )
+        }
+        self.assertIn("incidents_fts_ai", triggers)
+        self.assertIn("incidents_fts_ad", triggers)
+        self.assertIn("incidents_fts_au", triggers)
+
+    def test_fts_syncs_on_upsert_and_update(self) -> None:
+        upsert_incidents(self.conn, [incident_row(cad_number="fts-1")])
+        rows = list(
+            self.conn.execute(
+                "SELECT cad_number FROM incidents_fts WHERE incidents_fts MATCH ?",
+                ('"traffic"',),
+            )
+        )
+        self.assertEqual([r[0] for r in rows], ["fts-1"])
+        # Update via upsert keeps FTS in step (trigger fires on conflict).
+        row = incident_row(
+            cad_number="fts-1", call_type_final_desc="ASSAULT / BATTERY"
+        )
+        upsert_incidents(self.conn, [row])
+        old = list(
+            self.conn.execute(
+                "SELECT cad_number FROM incidents_fts WHERE incidents_fts MATCH ?",
+                ('"traffic"',),
+            )
+        )
+        self.assertEqual(old, [])
+        new = list(
+            self.conn.execute(
+                "SELECT cad_number FROM incidents_fts WHERE incidents_fts MATCH ?",
+                ('"assault"',),
+            )
+        )
+        self.assertEqual([r[0] for r in new], ["fts-1"])
+
+    def test_v2_database_backfills_fts(self) -> None:
+        # Rows written before the v3 triggers must become searchable.
+        self.conn.execute("DELETE FROM incidents_fts")
+        self.conn.execute("DROP TRIGGER IF EXISTS incidents_fts_ai")
+        self.conn.execute("DROP TRIGGER IF EXISTS incidents_fts_au")
+        self.conn.execute("DROP TRIGGER IF EXISTS incidents_fts_ad")
+        upsert_incidents(self.conn, [incident_row(cad_number="backfill-1")])
+        self.assertEqual(
+            list(self.conn.execute("SELECT COUNT(*) FROM incidents_fts"))[0][0],
+            0,
+        )
+        self.conn.execute("PRAGMA user_version = 2")
+        self.conn.commit()
+        self.conn.close()
+        migrated = connect(self.path)
+        try:
+            found = list(
+                migrated.execute(
+                    "SELECT cad_number FROM incidents_fts "
+                    "WHERE incidents_fts MATCH ?",
+                    ('"traffic"',),
+                )
+            )
+            self.assertEqual([r[0] for r in found], ["backfill-1"])
         finally:
             migrated.close()
         self.conn = connect(self.path)
